@@ -1,23 +1,14 @@
-FROM php:8.2-apache
+FROM php:8.2-cli
 
 # PHP 확장 설치
 RUN docker-php-ext-install pdo pdo_mysql mysqli
 
-# Apache mod_rewrite 활성화, MPM 충돌 해결
-RUN a2enmod rewrite && \
-    a2dismod mpm_event && \
-    a2enmod mpm_prefork
-
-# Railway PORT 환경변수 적용
-RUN sed -i 's/Listen 80/Listen ${PORT:-80}/g' /etc/apache2/ports.conf && \
-    sed -i 's/<VirtualHost \*:80>/<VirtualHost *:${PORT:-80}>/g' /etc/apache2/sites-enabled/000-default.conf
-
 # 앱 파일 복사
-COPY . /var/www/html/
+COPY . /app
 
-# 권한 설정
-RUN chown -R www-data:www-data /var/www/html
+WORKDIR /app
 
-EXPOSE 80
+EXPOSE 8080
 
-CMD ["apache2-foreground"]
+# PHP 내장 서버 사용 (Apache 없이)
+CMD php -S 0.0.0.0:${PORT:-8080} -t /app
