@@ -1,17 +1,20 @@
 <?php
 // =============================================
-// DB 연결 설정 - 이 파일의 값을 본인 환경에 맞게 수정하세요
+// DB 연결 설정
+// Railway 배포 시: 환경변수 자동 사용
+// 로컬(XAMPP) 사용 시: 아래 값 직접 수정
 // =============================================
 
 define('DB_CHARSET', 'utf8mb4');
-define('DB_HOST', 'localhost');       // 대부분 localhost
-define('DB_NAME', 'mental_health');
-define('DB_USER', 'root');
-define('DB_PASS', '');
+define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
+define('DB_PORT', getenv('DB_PORT') ?: '3306');
+define('DB_NAME', getenv('DB_NAME') ?: 'YOUR_DB_NAME');
+define('DB_USER', getenv('DB_USER') ?: 'YOUR_DB_USER');
+define('DB_PASS', getenv('DB_PASS') ?: 'YOUR_DB_PASS');
 
 // 세션 설정
 define('SESSION_NAME', 'mental_health_session');
-define('SESSION_LIFETIME', 3600); // 1시간
+define('SESSION_LIFETIME', 3600);
 
 // 앱 설정
 define('APP_NAME', '정신건강 척도 검사');
@@ -23,8 +26,8 @@ function getDB(): PDO {
     if ($pdo === null) {
         try {
             $dsn = sprintf(
-                'mysql:host=%s;dbname=%s;charset=%s',
-                DB_HOST, DB_NAME, DB_CHARSET
+                'mysql:host=%s;port=%s;dbname=%s;charset=%s',
+                DB_HOST, DB_PORT, DB_NAME, DB_CHARSET
             );
             $pdo = new PDO($dsn, DB_USER, DB_PASS, [
                 PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
