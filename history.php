@@ -333,6 +333,6 @@ function closeModal() {
 }
 </script>
 <?php endif; ?>
-
+<?php include __DIR__ . '/ui_settings.php'; ?>
 </body>
 </html>
