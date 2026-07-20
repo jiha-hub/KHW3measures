@@ -124,6 +124,7 @@ input:focus { border-color: var(--primary); background: #fff; }
 }
 </style>
 </head>
+    <?php include __DIR__ . '/ui_settings.php'; ?>
 <body>
 <div class="login-wrap">
   <div class="card">
