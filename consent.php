@@ -159,6 +159,7 @@ input:focus,select:focus{border-color:var(--primary);background:#fff;}
 }
 </style>
 </head>
+    <?php include __DIR__ . '/ui_settings.php'; ?>
 <body>
 <header class="header">
   <h1><a href="consent.php" style="color:white;text-decoration:none;">🧠 <?= APP_NAME ?></a></h1>
