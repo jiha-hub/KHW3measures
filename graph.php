@@ -97,6 +97,7 @@ tr:hover td{background:#f8fafd;}
 @media(max-width:600px){.summary-grid{grid-template-columns:repeat(2,1fr);}.filter-row{flex-direction:column;}.card{padding:16px;}}
 </style>
 </head>
+    <?php include __DIR__ . '/ui_settings.php'; ?>
 <body>
 <header class="header">
   <h1><a href="consent.php" style="color:white;text-decoration:none;">🧠 <?= APP_NAME ?></a></h1>
