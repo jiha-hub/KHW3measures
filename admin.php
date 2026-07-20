@@ -120,6 +120,7 @@ td { padding: 12px 14px; font-size: 0.875rem; border-bottom: 1px solid var(--bor
 .you-badge { display: inline-block; padding: 2px 8px; background: #eef2fb; color: var(--primary); border-radius: 4px; font-size: 0.75rem; font-weight: 700; margin-left: 6px; }
 </style>
 </head>
+    <?php include __DIR__ . '/ui_settings.php'; ?>
 <body>
 
 <header class="header">
