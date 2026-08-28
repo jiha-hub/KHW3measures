@@ -1,0 +1,13 @@
+# 서버별 DB 접속정보는 절대 저장소에 올리지 않음
+config.php
+
+# 로컬/에디터 잔여물
+.DS_Store
+*.log
+
+# 배포 전 자동 백업
+_backup_pre_csei_*/
+_csei_*.php
+
+# 로컬 Claude Code 설정
+.claude/

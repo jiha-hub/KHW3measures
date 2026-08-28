@@ -92,6 +92,10 @@ body.size-5 { zoom: 1.20; }
   font-family: inherit;
 }
 .size-fab:hover { background: #2d549a; transform: scale(1.1); }
+
+@media print {
+  .size-fab, .ui-size-panel { display: none !important; }
+}
 </style>
 
 <!-- 크기 조절 패널 -->

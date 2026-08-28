@@ -2,7 +2,87 @@
 require_once __DIR__ . '/auth.php';
 requireLogin();
 
-$db      = getDB();
+$db = getDB();
+
+// 설정 페이지 재인증 게이트 — 민감한 관리자 설정이므로 일반 로그인과 별개로 다시 확인
+$GATE_TTL = 900; // 15분 동안 유지
+$gateError = '';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'gate_verify') {
+    if (!verifyCsrfToken($_POST['csrf_token'] ?? '')) {
+        $gateError = '잘못된 요청입니다.';
+    } else {
+        $gUser = trim($_POST['gate_username'] ?? '');
+        $gPass = $_POST['gate_password'] ?? '';
+        $gStmt = $db->prepare('SELECT password FROM admins WHERE username = ?');
+        $gStmt->execute([$gUser]);
+        $gAdmin = $gStmt->fetch();
+        if ($gAdmin && password_verify($gPass, $gAdmin['password'])) {
+            $_SESSION['admin_gate_at'] = time();
+        } else {
+            $gateError = '아이디 또는 비밀번호가 올바르지 않습니다.';
+        }
+    }
+}
+
+$gateOk = isset($_SESSION['admin_gate_at']) && (time() - $_SESSION['admin_gate_at'] < $GATE_TTL);
+
+if (!$gateOk) {
+    $csrf = getCsrfToken();
+    ?>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>관리자 인증 — <?= APP_NAME ?></title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#f8f9fa;--card:#fff;--primary:#3182f6;--primary-dark:#1b64da;--text:#111827;--muted:#6b7280;--border:#e5e7eb;--radius:16px;}
+html,body{height:100%;font-family:'Apple SD Gothic Neo','Noto Sans KR',sans-serif;color:var(--text);}
+body{background:var(--bg);display:flex;align-items:center;justify-content:center;}
+.gate-card{background:var(--card);border-radius:var(--radius);box-shadow:0 2px 16px rgba(15,23,42,.08);padding:36px 32px;width:100%;max-width:360px;}
+.gate-icon{font-size:1.8rem;margin-bottom:6px;text-align:center;}
+.gate-title{font-size:1.05rem;font-weight:700;text-align:center;margin-bottom:6px;}
+.gate-sub{font-size:.82rem;color:var(--muted);text-align:center;margin-bottom:22px;}
+.form-group{margin-bottom:14px;}
+.form-group label{display:block;font-size:.8rem;font-weight:600;margin-bottom:6px;color:var(--text);}
+input[type=text],input[type=password]{width:100%;padding:12px 14px;border:1.5px solid var(--border);border-radius:12px;font-size:1rem;color:var(--text);background:#fafbfd;outline:none;font-family:inherit;}
+input:focus{border-color:var(--primary);background:#fff;}
+.btn-gate{width:100%;padding:13px 0;border-radius:12px;background:var(--primary);color:#fff;font-size:.95rem;font-weight:700;border:none;cursor:pointer;margin-top:6px;font-family:inherit;}
+.btn-gate:hover{background:var(--primary-dark);}
+.gate-error{background:#fdedec;border:1px solid #f1948a;color:#c0392b;padding:10px 14px;border-radius:10px;font-size:.85rem;margin-bottom:14px;}
+.gate-back{display:block;text-align:center;margin-top:16px;font-size:.8rem;color:var(--muted);text-decoration:none;}
+</style>
+  <?php include __DIR__ . '/pwa_head.php'; ?>
+  <?php include __DIR__ . '/design_tokens.php'; ?>
+</head>
+<body>
+<div class="gate-card">
+  <div class="gate-icon">🔒</div>
+  <div class="gate-title">관리자 설정 접근</div>
+  <div class="gate-sub">설정 페이지는 보안을 위해 관리자 아이디/비밀번호를<br>다시 한 번 확인합니다.</div>
+  <?php if ($gateError): ?><div class="gate-error"><?= htmlspecialchars($gateError) ?></div><?php endif; ?>
+  <form method="post" action="admin.php">
+    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf) ?>">
+    <input type="hidden" name="action" value="gate_verify">
+    <div class="form-group">
+      <label for="gate_username">아이디</label>
+      <input type="text" id="gate_username" name="gate_username" autocomplete="username" required autofocus>
+    </div>
+    <div class="form-group">
+      <label for="gate_password">비밀번호</label>
+      <input type="password" id="gate_password" name="gate_password" autocomplete="current-password" required>
+    </div>
+    <button type="submit" class="btn-gate">확인</button>
+  </form>
+  <a href="consent.php" class="gate-back">← 돌아가기</a>
+</div>
+</body>
+</html>
+    <?php
+    exit;
+}
+
 $success = '';
 $error   = '';
 
@@ -86,18 +166,19 @@ $csrf   = getCsrfToken();
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>관리자 설정 — <?= APP_NAME ?></title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root { --bg: #f0f4f8; --card: #fff; --primary: #3b6cb7; --primary-dark: #2d549a; --text: #1a2236; --muted: #6b7a99; --border: #dce3ef; --radius: 12px; --shadow: 0 4px 24px rgba(59,108,183,0.10); --red: #c0392b; }
 body { background: var(--bg); font-family: 'Apple SD Gothic Neo','Noto Sans KR',sans-serif; color: var(--text); }
-.header { background: var(--primary); color: white; padding: 0 24px; height: 60px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
-.header h1 { font-size: 1rem; font-weight: 700; }
-.header-nav { display: flex; gap: 16px; align-items: center; }
-.header-nav a { color: rgba(255,255,255,0.85); text-decoration: none; font-size: 0.875rem; padding: 6px 12px; border-radius: 6px; transition: background 0.2s; }
-.header-nav a:hover, .header-nav a.active { background: rgba(255,255,255,0.2); color: white; }
-.admin-badge { font-size: 0.8rem; color: rgba(255,255,255,0.7); }
+.header { background: #fff; color: #111827; padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; border-bottom: 1px solid #e5e7eb; }
+.header h1 { font-size: .95rem; font-weight: 700; }
+.header-nav { display: flex; gap: 6px; align-items: center; }
+.header-nav a { color: #4b5563; text-decoration: none; font-size: .82rem; padding: 6px 12px; border-radius: 8px; font-weight: 500; transition: background 0.2s, color .2s; }
+.header-nav a:hover { background: #f3f4f6; }
+.header-nav a.active { background: #eff6ff; color: #2563eb; font-weight: 700; }
+.admin-badge { font-size: .78rem; color: #9ca3af; }
 .container { max-width: 800px; margin: 0 auto; padding: 32px 24px; }
 .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 28px 32px; margin-bottom: 24px; }
 .card-title { font-size: 1rem; font-weight: 700; margin-bottom: 24px; padding-bottom: 14px; border-bottom: 2px solid var(--bg); }
@@ -119,12 +200,14 @@ th { background: #f5f7fc; padding: 10px 14px; font-size: 0.8rem; font-weight: 70
 td { padding: 12px 14px; font-size: 0.875rem; border-bottom: 1px solid var(--border); }
 .you-badge { display: inline-block; padding: 2px 8px; background: #eef2fb; color: var(--primary); border-radius: 4px; font-size: 0.75rem; font-weight: 700; margin-left: 6px; }
 </style>
+  <?php include __DIR__ . '/pwa_head.php'; ?>
+  <?php include __DIR__ . '/design_tokens.php'; ?>
 </head>
     <?php include __DIR__ . '/ui_settings.php'; ?>
 <body>
 
 <header class="header">
-  <h1><a href="consent.php" style="color:white;text-decoration:none;">🧠 <?= APP_NAME ?></a></h1>
+  <h1><a href="consent.php" style="color:#111827;text-decoration:none;">🧠 <?= APP_NAME ?></a></h1>
   <nav class="header-nav">
     <a href="consent.php">검사 입력</a>
     <a href="history.php">이력 조회</a>

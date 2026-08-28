@@ -1,44 +1,30 @@
 <?php
-// 세션 먼저 시작 (config와 동일한 세션명 사용)
+// PSQI-K 전용 저장 엔드포인트 (save_assessment.php와 동일한 구조)
 require_once __DIR__ . '/config.php';
 session_name(SESSION_NAME);
 session_start();
-require_once __DIR__ . '/scales.php';
+require_once __DIR__ . '/psqi_scoring.php';
 require_once __DIR__ . '/patient_store.php';
 
-// JSON 응답 헤더
 header('Content-Type: application/json; charset=utf-8');
 
-// 로그인 확인
 if (empty($_SESSION['admin_id'])) {
-    echo json_encode(['success' => false, 'message' => '로그인이 필요합니다.']);
-    exit;
+    echo json_encode(['success' => false, 'message' => '로그인이 필요합니다.']); exit;
 }
-
-// POST 확인
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    echo json_encode(['success' => false, 'message' => '잘못된 요청']);
-    exit;
+    echo json_encode(['success' => false, 'message' => '잘못된 요청']); exit;
 }
 
-// JSON 입력 파싱
 $raw   = file_get_contents('php://input');
 $input = json_decode($raw, true);
+if (!$input) { echo json_encode(['success' => false, 'message' => '데이터 파싱 오류']); exit; }
 
-if (!$input) {
-    echo json_encode(['success' => false, 'message' => '데이터 파싱 오류']);
-    exit;
-}
-
-// CSRF 확인
 $token = $input['csrf_token'] ?? '';
 if (empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
-    echo json_encode(['success' => false, 'message' => '보안 토큰 오류']);
-    exit;
+    echo json_encode(['success' => false, 'message' => '보안 토큰 오류']); exit;
 }
 
 $patientName = trim($input['patient_name'] ?? '');
-$scaleType   = $input['scale_type'] ?? '';
 $answers     = $input['answers'] ?? [];
 $memo        = trim($input['memo'] ?? '');
 $birthDate   = trim($input['birth_date'] ?? '');
@@ -46,29 +32,18 @@ $gender      = trim($input['gender'] ?? '');
 $phone       = trim($input['phone'] ?? '');
 $batteryId   = trim($input['battery_id'] ?? '');
 $assessmentId = (int)($input['assessment_id'] ?? 0);
-$scales      = getScales();
 
-if (empty($patientName)) {
-    echo json_encode(['success' => false, 'message' => '환자 이름 누락']);
-    exit;
-}
-if (!array_key_exists($scaleType, $scales)) {
-    echo json_encode(['success' => false, 'message' => '척도 오류: ' . $scaleType]);
-    exit;
-}
+if ($patientName === '') { echo json_encode(['success' => false, 'message' => '환자 이름 누락']); exit; }
 
-$expectedCount = count($scales[$scaleType]['questions']);
-$actualCount   = count($answers);
-if ($actualCount !== $expectedCount) {
-    echo json_encode(['success' => false, 'message' => "문항 수 불일치 (받은: {$actualCount}, 필요: {$expectedCount})"]);
-    exit;
+$meta = getPsqiMeta();
+if (count($answers) !== $meta['answer_count']) {
+    echo json_encode(['success' => false, 'message' => "문항 수 불일치 (받은: " . count($answers) . ", 필요: {$meta['answer_count']})"]); exit;
 }
 
 try {
-    $scored = calculateScore($scaleType, array_values($answers));
+    $scored = calculatePSQI(array_values($answers));
     $db     = getDB();
 
-    // 환자 조회/생성 (이름 + 생년월일 기준)
     $patientId = upsertPatient($db, $patientName, $birthDate ?: null, $gender ?: null, $phone ?: null);
 
     // 이미 저장된 검사(assessment_id)라면 새 행을 만들지 않고 갱신 (메모 추가 재저장 시 중복 방지)
@@ -98,7 +73,7 @@ try {
         );
         $stmt->execute([
             $patientId,
-            $scaleType,
+            'PSQI-K',
             json_encode($answers, JSON_UNESCAPED_UNICODE),
             $scored['total'],
             $scored['label'],
@@ -110,13 +85,15 @@ try {
     }
 
     echo json_encode([
-        'success' => true,
-        'id'      => $savedId,
-        'total'   => $scored['total'],
-        'label'   => $scored['label'],
-        'message' => '저장 완료',
+        'success'    => true,
+        'id'         => $savedId,
+        'total'      => $scored['total'],
+        'label'      => $scored['label'],
+        'components' => $scored['components'],
+        'efficiency' => $scored['efficiency'],
+        'poor_sleep' => $scored['poor_sleep'],
+        'message'    => '저장 완료',
     ]);
-
 } catch (Exception $e) {
     echo json_encode(['success' => false, 'message' => 'DB 오류: ' . $e->getMessage()]);
 }

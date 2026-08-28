@@ -29,7 +29,7 @@ $csrf = getCsrfToken();
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>로그인 — <?= APP_NAME ?></title>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -123,6 +123,8 @@ input:focus { border-color: var(--primary); background: #fff; }
     margin-bottom: 20px;
 }
 </style>
+  <?php include __DIR__ . '/pwa_head.php'; ?>
+  <?php include __DIR__ . '/design_tokens.php'; ?>
 </head>
     <?php include __DIR__ . '/ui_settings.php'; ?>
 <body>
