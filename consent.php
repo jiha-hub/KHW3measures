@@ -230,6 +230,11 @@ input:focus,select:focus{border-color:var(--primary);background:#fff;}
           'PHQ-9'  => ['우울 선별','9문항 / 0~27점','#b93d6c','#fff0f5'],
           'GAD-7'  => ['불안 선별','7문항 / 0~21점','#8a6100','#fff8e6'],
           'PSS-10' => ['스트레스 측정','10문항 / 0~40점','#1b7a43','#f0fff4'],
+          'PHQ-15' => ['신체증상','15문항 / 0~30점','#0e7490','#e7f6fb'],
+          'BDI-9'  => ['자살사고 선별','1문항 / 0~3점','#374151','#eef0f4'],
+          'S-GDpS' => ['노인우울','15문항 예/아니오','#7c3a12','#f7efe8'],
+          'K-MDQ'  => ['양극성 선별','13문항 예/아니오','#5b3fa6','#efeafb'],
+          'SSD-12' => ['신체증상장애','12문항 / 0~48점','#1f6f5c','#e6f5ef'],
           'PSQI-K' => ['수면의 질','수면 문항 / 0~21점','#6c5ce7','#f2effc'],
           'CSEI-s' => ['핵심칠정 감정','28문항 / 7감정 T점수','#0b8f8a','#e6f7f6'],
         ];
@@ -250,7 +255,7 @@ input:focus,select:focus{border-color:var(--primary);background:#fff;}
         </label>
         <?php endforeach; ?>
       </div>
-      <p style="font-size:.8rem;color:var(--muted);margin-top:12px;line-height:1.6;">여러 개를 선택하면 환자가 <strong>순서대로 이어서</strong> 검사합니다. 순서: PHQ-9 → GAD-7 → PSS-10 → PSQI-K → CSEI-s</p>
+      <p style="font-size:.8rem;color:var(--muted);margin-top:12px;line-height:1.6;">여러 개를 선택하면 환자가 <strong>순서대로 이어서</strong> 검사합니다. 순서: PHQ-9 → GAD-7 → PSS-10 → PHQ-15 → BDI-9 → S-GDpS → K-MDQ → SSD-12 → PSQI-K → CSEI-s</p>
       <div class="btn-row center">
         <button type="submit" class="btn btn-primary btn-cta">다음 단계로 →</button>
       </div>

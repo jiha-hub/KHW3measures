@@ -35,7 +35,41 @@ $TOTAL        = count($scale['questions']);
 <title>CSEI-s 핵심칠정 감정 검사 — <?= APP_NAME ?></title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#f0f4f8;--card:#fff;--primary:#3b6cb7;--primary-dark:#2d549a;--text:#1a2236;--muted:#6b7a99;--border:#dce3ef;--radius:12px;--shadow:0 4px 24px rgba(59,108,183,.10);}
+:root{--bg:#f0f4f8;--card:#fff;--primary:#3b6cb7;--primary-dark:#2d549a;--text:#1a2236;--muted:#6b7a99;--border:#dce3ef;--radius:12px;--shadow:0 4px 24px rgba(59,108,183,.10);--severe:#4b5563;}
+/* ===== 2단 레이아웃(사이드바 + 문항) ===== */
+.layout{flex:1;display:flex;gap:18px;max-width:1080px;width:100%;margin:0 auto;padding:16px;align-items:flex-start;}
+.sidebar{width:300px;flex-shrink:0;position:sticky;top:72px;display:flex;flex-direction:column;gap:12px;}
+.content{flex:1;min-width:0;display:flex;flex-direction:column;}
+.sb-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;}
+.sb-scale-name{font-size:1.5rem;font-weight:800;color:#0b8f8a;line-height:1.2;}
+.sb-scale-full{font-size:.78rem;color:var(--muted);margin-top:6px;line-height:1.5;}
+.sb-period-box{margin-top:14px;background:#e6f7f6;border:1.5px solid #0b8f8a;border-radius:12px;padding:12px 14px;text-align:center;}
+.sb-period-label{font-size:.72rem;color:var(--muted);font-weight:700;letter-spacing:.03em;}
+.sb-period-value{font-size:1.15rem;font-weight:800;color:#0b8f8a;margin-top:2px;}
+.sb-guide-title{font-size:.74rem;font-weight:800;color:var(--muted);margin:16px 0 6px;letter-spacing:.03em;}
+.sb-guide{background:#f8fafd;border-left:4px solid #0b8f8a;border-radius:0 8px 8px 0;padding:11px 13px;font-size:.86rem;color:var(--text);line-height:1.65;}
+.sb-progress{margin-top:14px;}
+.sb-progress-label{display:flex;justify-content:space-between;font-size:.76rem;color:var(--muted);margin-bottom:6px;font-weight:600;}
+.sb-progress-bar{height:8px;background:var(--border);border-radius:99px;overflow:hidden;}
+.sb-progress-fill{height:100%;background:#0b8f8a;border-radius:99px;transition:width .3s;}
+.sb-patient{font-size:.82rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;margin-bottom:10px;}
+.sb-patient b{color:var(--text);}
+.sb-patient .ok{color:#16a34a;font-weight:700;}
+.cancel-btn{width:100%;padding:11px;border-radius:10px;border:1.5px solid var(--border);background:#f8fafd;color:var(--muted);font-family:inherit;font-size:.86rem;font-weight:700;cursor:pointer;transition:all .2s;}
+.cancel-btn:hover{border-color:var(--severe);color:var(--severe);}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;padding:20px;}
+.modal-overlay.open{display:flex;}
+.modal-box{background:#fff;border-radius:16px;max-width:380px;width:100%;padding:24px;box-shadow:0 12px 48px rgba(0,0,0,.3);text-align:center;}
+.modal-box h3{font-size:1.1rem;font-weight:800;margin-bottom:10px;}
+.modal-box p{font-size:.9rem;color:var(--muted);line-height:1.6;margin-bottom:20px;}
+.modal-btns{display:flex;gap:10px;}.modal-btns .btn{flex:1;}
+body.font-lg .sb-guide{font-size:1rem !important;}
+body.font-lg .sb-period-value{font-size:1.3rem !important;}
+@media(max-width:860px){
+  .layout{flex-direction:column;gap:12px;padding:12px;}
+  .sidebar{width:100%;position:static;top:auto;}
+  .sb-scale-name{font-size:1.3rem;}
+}
 html,body{height:100%;font-family:'Apple SD Gothic Neo','Noto Sans KR',sans-serif;color:var(--text);}
 body{background:var(--bg);display:flex;flex-direction:column;min-height:100vh;}
 .header{background:#fff;color:#111827;padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;border-bottom:1px solid #e5e7eb;}
@@ -120,35 +154,41 @@ body.font-lg .instruction{font-size:1rem !important;}
   </nav>
 </header>
 
-<div class="main">
-
-  <!-- 환자 정보 바 -->
-  <div class="info-bar">
-    <div>
-      <div class="info-patient">👤 <?= htmlspecialchars($initPatient) ?></div>
-      <div class="info-meta">
+<div class="layout">
+  <!-- ===== 왼쪽 사이드바 ===== -->
+  <aside class="sidebar">
+    <div class="sb-card">
+      <div class="sb-scale-name">🌀 CSEI-s</div>
+      <div class="sb-scale-full">핵심칠정척도 단축형 · 한의학 칠정(七情) 기반 감정평가</div>
+      <div class="sb-period-box">
+        <div class="sb-period-label">응답 기간</div>
+        <div class="sb-period-value">최근 일주일 동안</div>
+      </div>
+      <div class="sb-guide-title">📝 문항 안내</div>
+      <div class="sb-guide"><?= htmlspecialchars($scale['instruction']) ?></div>
+      <div class="sb-progress">
+        <div class="sb-progress-label"><span id="ptxt">1 / <?= $TOTAL ?></span><span id="ppct">0%</span></div>
+        <div class="sb-progress-bar"><div class="sb-progress-fill" id="pfill" style="width:0%"></div></div>
+      </div>
+    </div>
+    <div class="sb-card">
+      <?php if ($initPatient): ?>
+      <div class="sb-patient">
+        <b><?= htmlspecialchars($initPatient) ?></b>
         <?php if ($gender): ?><span><?= htmlspecialchars($gender) ?></span><?php endif; ?>
-        <?php if ($birthDate): ?><span><?= htmlspecialchars($birthDate) ?></span><?php endif; ?>
-        <span class="scale-tag">CSEI-s</span>
+        <?php if ($battery && $batteryTotal > 1): ?><span>· 검사 <?= $batteryStep ?>/<?= $batteryTotal ?></span><?php endif; ?>
+        <span class="ok">✓ 동의</span>
       </div>
+      <?php endif; ?>
+      <button type="button" class="cancel-btn" id="cancelBtn" onclick="openCancel()">
+        <?= $battery ? ($isLastStep ? '이 검사 취소하고 결과 보기 →' : '이 검사 취소하고 다음으로 →') : '검사 취소' ?>
+      </button>
     </div>
-    <?php if ($battery && $batteryTotal > 1): ?>
-      <span class="battery-chip">검사 <?= $batteryStep ?> / <?= $batteryTotal ?></span>
-    <?php else: ?>
-      <span class="info-badge">✅ 동의 완료</span>
-    <?php endif; ?>
-  </div>
+  </aside>
 
+  <!-- ===== 오른쪽: 문항 ===== -->
+  <div class="content">
   <div class="card">
-    <div class="instruction"><?= htmlspecialchars($scale['instruction']) ?></div>
-
-    <div class="progress-wrap">
-      <div class="progress-label">
-        <span id="ptxt">1 / <?= $TOTAL ?></span>
-        <span id="ppct">0%</span>
-      </div>
-      <div class="progress-bar"><div class="progress-fill" id="pfill" style="width:0%"></div></div>
-    </div>
 
     <?php
     // 음영 세그먼트: 응답값 오름차순(1→5)으로 배치, 연한 파랑→진한 네이비
@@ -197,6 +237,19 @@ body.font-lg .instruction{font-size:1rem !important;}
 
   <input type="hidden" id="csrf_token" value="<?= htmlspecialchars($csrf) ?>">
   <input type="hidden" id="f_patient" value="<?= htmlspecialchars($initPatient) ?>">
+  </div>
+</div>
+
+<!-- 취소 확인 모달 -->
+<div class="modal-overlay" id="cancelModal" onclick="if(event.target===this)closeCancel()">
+  <div class="modal-box">
+    <h3 id="cancelTitle">검사를 취소할까요?</h3>
+    <p id="cancelMsg">현재 검사의 응답은 저장되지 않습니다.</p>
+    <div class="modal-btns">
+      <button type="button" class="btn btn-secondary" onclick="closeCancel()">계속 검사</button>
+      <button type="button" class="btn btn-primary" id="cancelConfirm">취소하고 진행</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -306,6 +359,25 @@ async function save(){
     console.error(e);
   }
 }
+
+// ===== 검사 취소/건너뛰기 =====
+function openCancel(){
+  const modal=document.getElementById('cancelModal');
+  const title=document.getElementById('cancelTitle'), msg=document.getElementById('cancelMsg'), btn=document.getElementById('cancelConfirm');
+  if(BATTERY){
+    title.textContent = BATTERY_LAST ? '이 검사를 취소할까요?' : '이 검사를 건너뛸까요?';
+    msg.textContent = BATTERY_LAST ? '현재 검사는 저장되지 않고 결과 화면으로 이동합니다.' : ('현재 검사는 저장되지 않고 다음 검사'+(NEXT_SCALE?(' ('+NEXT_SCALE+')'):'')+'로 넘어갑니다.');
+    btn.textContent = BATTERY_LAST ? '취소하고 결과 보기' : '건너뛰고 다음으로';
+    btn.onclick = ()=>{ window.location = NEXT_URL; };
+  } else {
+    title.textContent = '검사를 취소할까요?';
+    msg.textContent = '현재 검사의 응답은 저장되지 않습니다.';
+    btn.textContent = '취소하고 나가기';
+    btn.onclick = ()=>{ window.location = 'consent.php'; };
+  }
+  modal.classList.add('open');
+}
+function closeCancel(){ document.getElementById('cancelModal').classList.remove('open'); }
 
 showSlide(0); updateProg();
 </script>

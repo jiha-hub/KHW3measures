@@ -36,15 +36,17 @@ CREATE TABLE IF NOT EXISTS patients (
 CREATE TABLE IF NOT EXISTS assessments (
     id INT AUTO_INCREMENT PRIMARY KEY,
     patient_id INT NOT NULL,
-    scale_type ENUM('PHQ-9', 'GAD-7', 'PSS-10', 'PSQI-K', 'CSEI-s') NOT NULL,
+    scale_type ENUM('PHQ-9', 'GAD-7', 'PSS-10', 'PSQI-K', 'CSEI-s',
+                    'PHQ-15', 'BDI-9', 'S-GDpS', 'K-MDQ', 'SSD-12') NOT NULL,
     answers JSON NOT NULL,
     total_score INT NOT NULL,          -- CSEI-s는 종합 T점수
     result_label VARCHAR(50) NOT NULL, -- CSEI-s는 종합 분류(정상군/주의군/위험군)
     memo TEXT,
     admin_id INT NOT NULL,
     battery_id VARCHAR(40) NULL,
-    factor_scores JSON NULL,           -- CSEI-s: 7감정 요인별 T점수/분류 + 종합
+    factor_scores JSON NULL,           -- CSEI-s: 7감정 요인별 T점수/분류 + 종합 / SSD-12: 하위영역 점수
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    deleted_at DATETIME NULL DEFAULT NULL,  -- 소프트 삭제(숨김). NULL=정상, 값 있음=삭제됨
     FOREIGN KEY (patient_id) REFERENCES patients(id),
     FOREIGN KEY (admin_id) REFERENCES admins(id)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -54,3 +56,4 @@ CREATE INDEX idx_assessments_patient ON assessments(patient_id);
 CREATE INDEX idx_assessments_created ON assessments(created_at);
 CREATE INDEX idx_assessments_scale ON assessments(scale_type);
 CREATE INDEX idx_assessments_battery ON assessments(battery_id);
+CREATE INDEX idx_assessments_deleted ON assessments(deleted_at);

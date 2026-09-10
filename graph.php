@@ -3,11 +3,17 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/scales.php';
 require_once __DIR__ . '/psqi_scoring.php';
 require_once __DIR__ . '/csei.php';
+require_once __DIR__ . '/date_field.php';   // 숫자패드+달력 날짜 입력
 requireLogin();
 
 $db = getDB();
 
 $patients        = $db->query('SELECT id, name, birth_date, phone FROM patients ORDER BY name, birth_date')->fetchAll();
+// 환자별 검사일 목록 (검사일로 환자 찾기용)
+$patientDates = [];
+foreach ($db->query("SELECT DISTINCT patient_id, DATE(created_at) d FROM assessments WHERE deleted_at IS NULL")->fetchAll() as $pd) {
+    $patientDates[(int)$pd['patient_id']][] = $pd['d'];
+}
 $selectedPatient = (int)($_GET['patient_id'] ?? 0);
 $selectedScale   = $_GET['scale'] ?? 'PHQ-9';
 $dateFrom        = $_GET['date_from'] ?? date('Y-m-d', strtotime('-6 months'));
@@ -42,6 +48,11 @@ $cutoffMap       = [
     'PHQ-9'  => ['value' => 10, 'label' => '절단점 10점 (중간정도 우울)'],
     'GAD-7'  => ['value' => 10, 'label' => '절단점 10점 (중간 불안)'],
     'PSS-10' => null,
+    'PHQ-15' => ['value' => 10, 'label' => '절단점 10점 (중등도 이상 신체증상)'],
+    'BDI-9'  => ['value' => 1,  'label' => '1점 이상 시 자살사고 있음 — 안전 평가 필요'],
+    'S-GDpS' => ['value' => 8,  'label' => '절단점 8점 (우울 의심)'],
+    'K-MDQ'  => ['value' => 7,  'label' => '절단점 7점 (양극성 선별 양성)'],
+    'SSD-12' => ['value' => 23, 'label' => '절단점 23점 (국제 표준)'],
     'PSQI-K' => ['value' => 5,  'label' => '절단점 5점 초과 시 수면의 질 저하'],
     'CSEI-s' => null,
 ];
@@ -54,6 +65,7 @@ if ($selectedPatient) {
         SELECT a.id, a.total_score, a.result_label, a.created_at, a.memo, a.factor_scores
         FROM assessments a
         WHERE a.patient_id = ? AND a.scale_type = ?
+          AND a.deleted_at IS NULL
           AND DATE(a.created_at) BETWEEN ? AND ?
         ORDER BY a.created_at ASC
     ");
@@ -89,10 +101,15 @@ if ($isCseiGraph) {
 
 $labelColorMap = [
     '우울아님'=>'green','가벼운 우울'=>'yellow','중간정도 우울'=>'orange',
-    '중한 우울'=>'red','심한 우울'=>'darkred',
-    '불안아님'=>'green','가벼운 불안'=>'yellow','중간 불안'=>'orange','심한 불안'=>'red',
-    '낮은 스트레스'=>'green','중간 스트레스'=>'yellow','높은 스트레스'=>'red',
-    '정상군'=>'green','주의군'=>'yellow','위험군'=>'red',
+    '중한 우울'=>'black','심한 우울'=>'black',
+    '불안아님'=>'green','가벼운 불안'=>'yellow','중간 불안'=>'orange','심한 불안'=>'black',
+    '낮은 스트레스'=>'green','중간 스트레스'=>'yellow','높은 스트레스'=>'black',
+    '정상군'=>'green','주의군'=>'yellow','위험군'=>'black',
+    '최소 신체증상'=>'green','경도 신체증상'=>'yellow','중등도 신체증상'=>'orange','고도 신체증상'=>'black',
+    '자살사고 없음'=>'green','자살사고 – 경도'=>'yellow','자살사고 – 뚜렷'=>'black',
+    '정상'=>'green','경도 우울 경향'=>'yellow','우울 의심'=>'black',
+    '선별 음성'=>'green','선별 양성'=>'black','임상적 위험군'=>'black',
+    '양호한 수면'=>'green','경도 수면문제'=>'yellow','수면의 질 저하'=>'black',
 ];
 ?>
 <!DOCTYPE html>
@@ -102,6 +119,8 @@ $labelColorMap = [
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>그래프 — <?= APP_NAME ?></title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#f0f4f8;--card:#fff;--primary:#3b6cb7;--primary-dark:#2d549a;--text:#1a2236;--muted:#6b7a99;--border:#dce3ef;--radius:12px;--shadow:0 4px 24px rgba(59,108,183,.10);--green:#27ae60;--yellow:#f39c12;--orange:#e67e22;--red:#c0392b;}
@@ -124,14 +143,15 @@ body{background:#f8f9fa;font-family:'Apple SD Gothic Neo','Noto Sans KR',sans-se
 #patientSearch::placeholder{color:#9ca3af;}
 @media(min-width:900px){
   .layout{display:grid;grid-template-columns:360px 1fr;gap:16px;align-items:start;}
-  .sidebar{position:sticky;top:72px;margin-bottom:0;max-height:calc(100vh - 88px);overflow-y:auto;overflow-x:hidden;}
+  /* 스크롤해도 항상 따라오는 고정 사이드바. overflow 제거 → 환자 검색 드롭다운이 잘리지 않음 */
+  .sidebar{position:sticky;top:72px;margin-bottom:0;}
 }
 .card{background:#fff;border-radius:16px;box-shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);padding:20px;margin-bottom:16px;}
 .card-title{font-size:1rem;font-weight:700;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #f3f4f6;color:#111827;}
 .filter-group{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;}
 .filter-group label{font-size:.78rem;font-weight:600;color:#6b7280;}
 .filter-group.split{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-select,input[type=date]{width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:.875rem;color:var(--text);background:#fafbfd;outline:none;font-family:inherit;}
+select,input[type=date],input[type=text].df-text{width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:.875rem;color:var(--text);background:#fafbfd;outline:none;font-family:inherit;}
 select:focus,input:focus{border-color:#2563eb;}
 
 /* 척도 선택 (2x2 그리드) */
@@ -163,8 +183,9 @@ tr:hover td{background:#f3f4f6;}
 .badge-green{background:#dcfce7;color:#166534;}
 .badge-yellow{background:#fef3c7;color:#92400e;}
 .badge-orange{background:#ffedd5;color:#9a3412;}
-.badge-red{background:#fee2e2;color:#991b1b;}
-.badge-darkred{background:#fecaca;color:#7f1d1d;}
+.badge-red{background:#e5e7eb;color:#4b5563;}
+.badge-darkred{background:#e5e7eb;color:#4b5563;}
+.badge-black{background:#e5e7eb;color:#4b5563;}
 @media(max-width:600px){.summary-grid{grid-template-columns:repeat(2,1fr);}.card{padding:16px;}}
 /* 환자 검색 드롭다운 */
 .patient-dropdown{position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid #e5e7eb;border-radius:10px;margin-top:4px;max-height:280px;overflow-y:auto;z-index:60;box-shadow:0 8px 24px rgba(0,0,0,.12);display:none;}
@@ -177,6 +198,7 @@ tr:hover td{background:#f3f4f6;}
 </style>
   <?php include __DIR__ . '/pwa_head.php'; ?>
   <?php include __DIR__ . '/design_tokens.php'; ?>
+  <?php dateFieldAssets(); ?>
 </head>
     <?php include __DIR__ . '/ui_settings.php'; ?>
 <body>
@@ -209,8 +231,12 @@ tr:hover td{background:#f3f4f6;}
         }
       }
     ?>
+    <div class="filter-group">
+      <label>검사일로 찾기 <span style="font-weight:400;color:#9ca3af;">(선택)</span></label>
+      <?php renderDateField('', '', 'examDateFilter', '검사일 (숫자·달력)'); ?>
+    </div>
     <div class="filter-group filter-patient-wrap" style="position:relative;">
-      <label>환자 검색</label>
+      <label>환자 검색 <span id="examDateNote" style="font-weight:400;color:#2563eb;"></span></label>
       <input type="text" id="patientSearch" autocomplete="off" placeholder="이름 입력 (예: 정지하)"
              value="<?= htmlspecialchars($selPatientLabel) ?>">
       <input type="hidden" name="patient_id" id="patientId" value="<?= $selectedPatient ?: '' ?>">
@@ -221,11 +247,11 @@ tr:hover td{background:#f3f4f6;}
     <div class="filter-group split">
       <div>
         <label>시작</label>
-        <input type="date" name="date_from" value="<?= $dateFrom ?>">
+        <?php renderDateField('date_from', $dateFrom, 'dateFromInput', '시작일'); ?>
       </div>
       <div>
         <label>종료</label>
-        <input type="date" name="date_to" value="<?= $dateTo ?>">
+        <?php renderDateField('date_to', $dateTo, 'dateToInput', '종료일'); ?>
       </div>
     </div>
     <input type="hidden" name="scale" value="<?= htmlspecialchars($selectedScale) ?>">
@@ -290,8 +316,13 @@ tr:hover td{background:#f3f4f6;}
 
   <!-- 7가지 감정 T점수 날짜별 추이 -->
   <div class="card">
-    <div class="card-title">7가지 감정 T점수 추이
-      <span style="font-size:.78rem;font-weight:400;color:var(--muted);margin-left:8px;"><?= $dateFrom ?> ~ <?= $dateTo ?></span>
+    <div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span>7가지 감정 T점수 추이</span>
+      <span style="font-size:.78rem;font-weight:400;color:var(--muted);"><?= $dateFrom ?> ~ <?= $dateTo ?></span>
+      <span style="margin-left:auto;display:flex;gap:6px;align-items:center;">
+        <span style="font-size:.72rem;color:#9ca3af;">🔍 휠·핀치로 확대 / 드래그로 이동</span>
+        <button type="button" class="btn" style="background:#eef2fb;color:#2563eb;padding:6px 12px;" onclick="cseiTrendChart.resetZoom()">확대 초기화</button>
+      </span>
     </div>
     <div class="chart-wrap" style="height:clamp(300px,46vh,420px);min-width:0;width:100%;overflow:hidden;"><canvas id="cseiTrend"></canvas></div>
   </div>
@@ -342,9 +373,13 @@ tr:hover td{background:#f3f4f6;}
 
   <!-- 그래프 -->
   <div class="card">
-    <div class="card-title">
-      <?= htmlspecialchars($patientLabel) ?> — <?= $selectedScale ?> 점수 추이
-      <span style="font-size:.78rem;font-weight:400;color:var(--muted);margin-left:8px;"><?= $dateFrom ?> ~ <?= $dateTo ?></span>
+    <div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span><?= htmlspecialchars($patientLabel) ?> — <?= $selectedScale ?> 점수 추이</span>
+      <span style="font-size:.78rem;font-weight:400;color:var(--muted);"><?= $dateFrom ?> ~ <?= $dateTo ?></span>
+      <span style="margin-left:auto;display:flex;gap:6px;align-items:center;">
+        <span style="font-size:.72rem;color:#9ca3af;">🔍 휠·핀치 확대</span>
+        <button type="button" class="btn" style="background:#eef2fb;color:#2563eb;padding:6px 12px;" onclick="trendChart.resetZoom()">확대 초기화</button>
+      </span>
     </div>
     <div class="chart-wrap">
       <canvas id="trendChart"></canvas>
@@ -387,11 +422,11 @@ const scoringRanges = <?= json_encode(array_map(fn($r) => ['min'=>$r['min'],'max
 
 const colorMap = {
   green:'#27ae6022', yellow:'#f39c1222', orange:'#e67e2222',
-  red:'#c0392b22', darkred:'#1a237e22'
+  red:'#4b556322', darkred:'#4b556322', black:'#4b556322'
 };
 const colorFull = {
   green:'#27ae60', yellow:'#d4a017', orange:'#d35400',
-  red:'#c0392b', darkred:'#1a237e'
+  red:'#4b5563', darkred:'#4b5563', black:'#4b5563'
 };
 
 const ctx = document.getElementById('trendChart').getContext('2d');
@@ -447,12 +482,12 @@ const cutoffPlugin = {
     ctx.beginPath();
     ctx.moveTo(chartArea.left,y);
     ctx.lineTo(chartArea.right,y);
-    ctx.strokeStyle='#c0392b';
+    ctx.strokeStyle='#4b5563';
     ctx.lineWidth=2;
     ctx.setLineDash([6,4]);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle='#c0392b';
+    ctx.fillStyle='#4b5563';
     ctx.font='bold 11px sans-serif';
     ctx.textAlign='right';
     ctx.fillText(`절단점 ${cutoff}점`, chartArea.right-4, y-5);
@@ -460,13 +495,14 @@ const cutoffPlugin = {
   }
 };
 
-new Chart(ctx, {
+const T_XMAX = Math.max(1, labels.length - 1);
+const tXTick = (v)=>{ const i=Math.round(v); return (Math.abs(v-i)<1e-6 && i>=0 && i<labels.length) ? labels[i] : ''; };
+const trendChart = new Chart(ctx, {
   type:'line',
   data:{
-    labels,
     datasets:[{
       label:`${<?= json_encode($selectedScale) ?>} 점수`,
-      data:scores,
+      data:scores.map((s,i)=>({x:i, y:s})),
       borderColor:'#2563eb',
       backgroundColor:gradient,
       borderWidth:2.5,
@@ -485,10 +521,12 @@ new Chart(ctx, {
   options:{
     responsive:true,
     maintainAspectRatio:false,
+    interaction:{mode:'index',intersect:false,axis:'x'},
     plugins:{
       legend:{display:false},
       tooltip:{
         callbacks:{
+          title(items){ const i=Math.round(items[0].parsed.x); return labels[i] ?? ''; },
           label(c){
             const s=c.parsed.y;
             let lbl='';
@@ -496,11 +534,17 @@ new Chart(ctx, {
             return `${s}점 — ${lbl}`;
           }
         }
+      },
+      zoom:{
+        zoom:{ wheel:{enabled:true, speed:0.06}, pinch:{enabled:true}, mode:'x' },
+        pan:{ enabled:true, mode:'x', threshold:5 },
+        limits:{ x:{min:0, max:T_XMAX, minRange:1.5} }
       }
     },
     scales:{
       y:{min:0,max:maxScore,ticks:{stepSize:Math.ceil(maxScore/6)},grid:{color:'#e5e7eb'}},
-      x:{grid:{color:'#e5e7eb'}}
+      x:{type:'linear', min:0, max:T_XMAX, grid:{color:'#e5e7eb'},
+         ticks:{stepSize:1, autoSkip:true, maxRotation:0, callback:tXTick}}
     }
   },
   plugins:[bgBandPlugin,cutoffPlugin,yLabelPlugin]
@@ -526,7 +570,7 @@ const latest = CS[CS.length-1];
 const rlabels = FORDER.map(k=>FNAME[k]);
 const rvals   = FORDER.map(k=> (latest[k] ?? 0));
 const rColors = (latest.factors||[]).reduce((m,f)=>{m[f.factor]=f.group;return m;},{});
-const rPoint  = FORDER.map(k=> ({normal:'#27ae60',caution:'#e67e22',risk:'#c0392b'})[rColors[k]] || '#3b6cb7');
+const rPoint  = FORDER.map(k=> ({normal:'#27ae60',caution:'#e67e22',risk:'#4b5563'})[rColors[k]] || '#3b6cb7');
 new Chart(document.getElementById('cseiRadar').getContext('2d'), {
   type:'radar',
   data:{ labels:rlabels, datasets:[
@@ -538,20 +582,30 @@ new Chart(document.getElementById('cseiRadar').getContext('2d'), {
     plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:12}}}}
 });
 
-// 2) 7감정 날짜별 추이 (멀티라인) + 종합
+// 2) 7감정 날짜별 추이 — 선형 x축(연속)으로 부드러운 확대 + 좌우 드래그(패닝)
 const trendDs = FORDER.map(k=>({
-  label:FNAME[k], data:CS.map(r=> (r[k] ?? null)), borderColor:FCOLOR[k], backgroundColor:FCOLOR[k],
+  label:FNAME[k], data:CS.map((r,i)=>({x:i, y:(r[k] ?? null)})), borderColor:FCOLOR[k], backgroundColor:FCOLOR[k],
   borderWidth:2, pointRadius:4, pointHoverRadius:6, tension:0.3, fill:false, spanGaps:true
 }));
-trendDs.push({label:'종합', data:CS.map(r=>r.overall), borderColor:'#0f172a', borderDash:[6,4], borderWidth:2.5, pointRadius:3, tension:0.3, fill:false});
-new Chart(document.getElementById('cseiTrend').getContext('2d'), {
+trendDs.push({label:'종합', data:CS.map((r,i)=>({x:i, y:r.overall})), borderColor:'#0f172a', borderDash:[6,4], borderWidth:2.5, pointRadius:3, tension:0.3, fill:false});
+const XMAX = Math.max(1, dates.length - 1);
+const xTickLabel = (v)=>{ const i=Math.round(v); return (Math.abs(v-i)<1e-6 && i>=0 && i<dates.length) ? dates[i] : ''; };
+const cseiTrendChart = new Chart(document.getElementById('cseiTrend').getContext('2d'), {
   type:'line',
-  data:{ labels:dates, datasets:trendDs },
-  options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+  data:{ datasets:trendDs },
+  options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false,axis:'x'},
     plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:14,usePointStyle:true}},
-      tooltip:{callbacks:{title:(items)=>CS[items[0].dataIndex].fulldate}}},
-    scales:{y:{min:0,max:100,ticks:{stepSize:20,color:'#999'},grid:{color:'#eef1f6'},title:{display:true,text:'T-score',color:'#999',font:{size:11}}},
-      x:{grid:{display:false},ticks:{font:{size:11,weight:'bold'},color:'#666'}}}},
+      tooltip:{callbacks:{title:(items)=>{ const r=CS[Math.round(items[0].parsed.x)]; return r?r.fulldate:''; }}},
+      zoom:{
+        zoom:{ wheel:{enabled:true, speed:0.06}, pinch:{enabled:true}, mode:'x' },
+        pan:{ enabled:true, mode:'x', threshold:5 },
+        // 한 번에 최소 2개 지점은 보이도록(minRange) + 데이터 범위 밖으로는 못 나가게
+        limits:{ x:{ min:0, max:XMAX, minRange:1.5 } }
+      }},
+    scales:{
+      y:{min:0,max:100,ticks:{stepSize:20,color:'#999'},grid:{color:'#eef1f6'},title:{display:true,text:'T-score',color:'#999',font:{size:11}}},
+      x:{type:'linear', min:0, max:XMAX, grid:{display:false},
+         ticks:{stepSize:1, autoSkip:true, maxRotation:0, includeBounds:true, font:{size:11,weight:'bold'},color:'#666', callback:xTickLabel}}}},
   plugins:[bandPlugin]
 });
 </script>
@@ -561,19 +615,26 @@ new Chart(document.getElementById('cseiTrend').getContext('2d'), {
 // 환자 검색형 선택
 (function(){
   const PATIENTS = <?= json_encode(array_map(fn($p)=>['id'=>(int)$p['id'],'name'=>$p['name'],'birth'=>$p['birth_date']], $patients), JSON_UNESCAPED_UNICODE) ?>;
+  const PATIENT_DATES = <?= json_encode($patientDates) ?>;  // {pid:[YYYY-MM-DD,...]}
   const input = document.getElementById('patientSearch');
   const list  = document.getElementById('patientList');
   const hid   = document.getElementById('patientId');
+  const dateF = document.getElementById('examDateFilter');
+  const dNote = document.getElementById('examDateNote');
   if (!input || !list || !hid) return;
   const form  = input.closest('form');
   const esc = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
   function render(q){
     q = (q||'').trim().toLowerCase();
+    const day = dateF ? dateF.value : '';
     let items = PATIENTS;
-    if (q) items = PATIENTS.filter(p => (p.name||'').toLowerCase().includes(q) || (p.birth||'').includes(q));
-    if (!items.length){ list.innerHTML = '<div class="patient-empty">일치하는 환자가 없습니다</div>'; }
-    else {
+    // 검사일 필터: 그 날 검사한 환자만
+    if (day) items = items.filter(p => (PATIENT_DATES[p.id]||[]).includes(day));
+    if (q) items = items.filter(p => (p.name||'').toLowerCase().includes(q) || (p.birth||'').includes(q));
+    if (!items.length){
+      list.innerHTML = '<div class="patient-empty">' + (day ? '이 날짜에 검사한 환자가 없습니다' : '일치하는 환자가 없습니다') + '</div>';
+    } else {
       list.innerHTML = items.slice(0,50).map(p =>
         `<div class="patient-item" data-id="${p.id}" data-label="${esc(p.name)} (${esc(p.birth||'생년월일 미상')})">
            <span>${esc(p.name)}</span><span class="pi-birth">${esc(p.birth||'생년월일 미상')}</span>
@@ -581,6 +642,13 @@ new Chart(document.getElementById('cseiTrend').getContext('2d'), {
     }
     list.classList.add('open');
   }
+  function onExamDate(){
+    const v = dateF.value;
+    if (dNote) dNote.textContent = /^\d{4}-\d{2}-\d{2}$/.test(v) ? '· '+v+' 검사자' : '';
+    hid.value=''; render(input.value);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) input.focus();
+  }
+  if (dateF){ dateF.addEventListener('change', onExamDate); dateF.addEventListener('input', onExamDate); }
   input.addEventListener('focus', ()=>render(input.value));
   input.addEventListener('input', ()=>{ hid.value=''; render(input.value); });
   list.addEventListener('click', e=>{

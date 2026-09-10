@@ -36,8 +36,10 @@ $assessmentId = (int)($input['assessment_id'] ?? 0);
 if ($patientName === '') { echo json_encode(['success' => false, 'message' => '환자 이름 누락']); exit; }
 
 $meta = getPsqiMeta();
-if (count($answers) !== $meta['answer_count']) {
-    echo json_encode(['success' => false, 'message' => "문항 수 불일치 (받은: " . count($answers) . ", 필요: {$meta['answer_count']})"]); exit;
+$scoredCount = $meta['scored_count'] ?? 18;
+// 채점 대상 18문항은 반드시 있어야 하며, 그 뒤(문항10 참고·주관식)는 있을 수도 없을 수도 있음
+if (count($answers) < $scoredCount) {
+    echo json_encode(['success' => false, 'message' => "문항 수 부족 (받은: " . count($answers) . ", 최소 필요: {$scoredCount})"]); exit;
 }
 
 try {

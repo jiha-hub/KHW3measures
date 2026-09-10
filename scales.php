@@ -1,6 +1,16 @@
 <?php
 // =============================================
 // 척도 문항 및 채점 기준 정의 (원본 파일 기준)
+//
+// 응답 저장 규칙(중요):
+//   - 모든 척도는 "선택한 보기의 인덱스(0부터)"를 응답값으로 저장합니다.
+//     기존 PHQ-9/GAD-7/PSS-10 은 option_values 가 [0,1,2,...] 이므로
+//     인덱스 == 값 이 되어 과거 데이터와 완전히 호환됩니다.
+//   - 채점은 아래 우선순위로 이뤄집니다.
+//       1) item_scores 가 있으면  → 점수 = item_scores[문항][선택인덱스]
+//          (같은 응답이라도 문항마다 다른 점수를 줄 수 있음: S-GDpS, PSS-10 역채점 등)
+//       2) reverse_items 가 있으면 → 점수 = max(option_values) - 값 (역채점, 하위호환)
+//       3) 둘 다 없으면          → 점수 = 값(=선택 인덱스)
 // =============================================
 
 function getScales(): array {
@@ -9,7 +19,9 @@ function getScales(): array {
         'PHQ-9' => [
             'name'        => 'PHQ-9',
             'full_name'   => '한글판 우울증 선별도구 (PHQ-9: Patient Health Questionnaire-9)',
-            'period'      => '지난 2주 동안에',
+            'category'    => '우울',
+            'period'      => '지난 2주 동안',
+            'layout'      => 'segment',
             'instruction' => '지난 2주 동안에 다음과 같은 문제들로 얼마나 자주 방해를 받았는지 해당 번호에 표시해 주세요.',
             'options'     => ['없음', '2~3일', '7일 이상', '거의 매일'],
             'option_values' => [0, 1, 2, 3],
@@ -28,8 +40,8 @@ function getScales(): array {
                 ['min' => 0,  'max' => 4,  'label' => '우울아님',     'color' => 'green'],
                 ['min' => 5,  'max' => 9,  'label' => '가벼운 우울',  'color' => 'yellow'],
                 ['min' => 10, 'max' => 14, 'label' => '중간정도 우울','color' => 'orange'],
-                ['min' => 15, 'max' => 19, 'label' => '중한 우울',    'color' => 'red'],
-                ['min' => 20, 'max' => 27, 'label' => '심한 우울',    'color' => 'darkred'],
+                ['min' => 15, 'max' => 19, 'label' => '중한 우울',    'color' => 'black'],
+                ['min' => 20, 'max' => 27, 'label' => '심한 우울',    'color' => 'black'],
             ],
             'cutoff'     => 10,
             'max_score'  => 27,
@@ -39,7 +51,9 @@ function getScales(): array {
         'GAD-7' => [
             'name'        => 'GAD-7',
             'full_name'   => '일반화된 불안장애 척도 (GAD-7: Generalized Anxiety Disorder-7)',
+            'category'    => '불안',
             'period'      => '지난 2주 동안',
+            'layout'      => 'segment',
             'instruction' => '지난 2주 동안 당신은 다음의 문제들로 인해서 얼마나 자주 방해를 받았는지 해당 번호에 표시해 주세요.',
             'options'     => ['전혀 방해받지 않았다', '며칠 동안 방해받았다', '7일 이상 방해받았다', '거의 매일 방해받았다'],
             'option_values' => [0, 1, 2, 3],
@@ -56,7 +70,7 @@ function getScales(): array {
                 ['min' => 0,  'max' => 4,  'label' => '불안아님',   'color' => 'green'],
                 ['min' => 5,  'max' => 9,  'label' => '가벼운 불안','color' => 'yellow'],
                 ['min' => 10, 'max' => 14, 'label' => '중간 불안',  'color' => 'orange'],
-                ['min' => 15, 'max' => 21, 'label' => '심한 불안',  'color' => 'red'],
+                ['min' => 15, 'max' => 21, 'label' => '심한 불안',  'color' => 'black'],
             ],
             'cutoff'     => 10,
             'max_score'  => 21,
@@ -66,11 +80,14 @@ function getScales(): array {
         'PSS-10' => [
             'name'        => 'PSS-10',
             'full_name'   => '스트레스 척도 (수정된 PSS-10: Perceived Stress Scale)',
+            'category'    => '스트레스',
             'period'      => '지난 1개월 동안',
+            'layout'      => 'segment',
             'instruction' => '지난 1개월 동안 당신이 느끼고 생각한 것에 대한 것입니다. 각 문항의 내용을 얼마나 자주 느꼈는지 해당 번호에 표시해 주세요.',
             'options'     => ['매우 아니다', '아니다', '보통', '그렇다', '매우 그렇다'],
             'option_values' => [0, 1, 2, 3, 4],
             // 역채점 문항: 4,5,7,8번 (0-index: 3,4,6,7)
+            // → 같은 응답("그렇다")이라도 일반 문항은 3점, 역채점 문항은 1점으로 다르게 채점됨.
             'reverse_items' => [3, 4, 6, 7],
             'questions'   => [
                 '지난 1개월 동안, 예상치 못한 일이 생겨서 기분 나빠진 적이 있었다.',
@@ -87,34 +104,273 @@ function getScales(): array {
             'scoring' => [
                 ['min' => 0,  'max' => 13, 'label' => '낮은 스트레스', 'color' => 'green'],
                 ['min' => 14, 'max' => 26, 'label' => '중간 스트레스', 'color' => 'yellow'],
-                ['min' => 27, 'max' => 40, 'label' => '높은 스트레스', 'color' => 'red'],
+                ['min' => 27, 'max' => 40, 'label' => '높은 스트레스', 'color' => 'black'],
             ],
             'cutoff'     => null, // PSS는 공식 절단점 없음
             'max_score'  => 40,
-            'note'       => '역채점 항목이 포함되어 있습니다. PSS는 진단 도구가 아니며 공식 절단점이 없습니다.',
+            'note'       => '역채점 항목(4·5·7·8번)이 포함되어 있어, 같은 응답이라도 문항에 따라 점수가 반대로 부여됩니다. PSS는 진단 도구가 아니며 공식 절단점이 없습니다.',
             'source'     => '이종하 외(2012). 정신신체의학 20(2), 127-134 / 저작권: Cohen S, Kamarck T (한국판: 한창수)',
+        ],
+
+        // =====================================================================
+        // 신규 추가 척도 (2026.09) — 원광대학교 한방병원 한방신경정신과 심리검사 매뉴얼
+        // ⚠️ 모든 문항 문안·채점 기준은 표준 검증판을 근거로 작성했습니다.
+        //    임상·연구 사용 전 보유하신 공식 문서와 한 문항씩 대조·검수하세요.
+        // =====================================================================
+
+        // ---- 1) PHQ-15 : 신체증상 척도 ----
+        'PHQ-15' => [
+            'name'        => 'PHQ-15',
+            'full_name'   => '신체증상 척도 (PHQ-15: Patient Health Questionnaire-15)',
+            'category'    => '신체증상',
+            'period'      => '지난 4주 동안',
+            'layout'      => 'segment',
+            'instruction' => '지난 4주 동안 다음에 나열되는 증상들에 얼마나 시달렸는지 해당하는 정도를 선택해 주세요.',
+            'options'       => ['전혀 시달리지 않음', '약간 시달림', '대단히 시달림'],
+            'option_values' => [0, 1, 2],
+            // 문항 4(생리통)는 여성만 응답. 남성은 자동으로 0점 처리하고 화면에서 건너뜁니다.
+            'female_only_items' => [3],
+            'questions'   => [
+                '위통',
+                '허리통증',
+                '팔, 다리, 관절(무릎, 고관절 등)의 통증',
+                '(여성만 해당) 생리 기간 동안 생리통의 문제',
+                '두통',
+                '가슴통증, 흉통',
+                '어지러움',
+                '기절할 것 같음',
+                '심장이 빨리 뜀',
+                '숨이 참',
+                '성교 중 통증 등의 문제',
+                '변비, 묽은 변이나 설사',
+                '메슥거림, 방귀, 소화불량',
+                '피로감, 기운 없음',
+                '수면의 어려움',
+            ],
+            'scoring' => [
+                ['min' => 0,  'max' => 4,  'label' => '최소 신체증상',  'color' => 'green'],
+                ['min' => 5,  'max' => 9,  'label' => '경도 신체증상',  'color' => 'yellow'],
+                ['min' => 10, 'max' => 14, 'label' => '중등도 신체증상','color' => 'orange'],
+                ['min' => 15, 'max' => 30, 'label' => '고도 신체증상',  'color' => 'black'],
+            ],
+            'cutoff'     => 10,
+            'max_score'  => 30,
+            'note'       => '문항 4(생리통)는 여성만 응답하며, 남성은 자동 0점 처리됩니다. 절단점 10점 이상은 임상적으로 유의한 신체화(신체증상) 수준을 시사합니다. 선별도구이며 확정 진단이 아닙니다.',
+            'source'     => 'Kroenke K 외(2002) Psychosom Med 64:258-266 / 한국판: 한창수 등. 임상 사용 시 공식 문안 검수 필요.',
+        ],
+
+        // ---- 2) BDI-9 : 자살사고 단일문항 (BDI 9번) ----
+        'BDI-9' => [
+            'name'        => 'BDI-9',
+            'full_name'   => '자살사고 선별 문항 (BDI 9번 문항)',
+            'category'    => '자살사고',
+            'period'      => '요즈음',
+            'layout'      => 'vertical',       // 보기 문장이 길어 세로 버튼으로 표시
+            'instruction' => '요즈음 자신에게 가장 적합하다고 생각되는 문장을 하나만 선택해 주세요.',
+            'options'     => [
+                '나는 자살 같은 것을 생각하지 않는다.',
+                '나는 자살할 생각을 가끔 하지만, 실제로 하지는 않을 것이다.',
+                '자살하고 싶은 생각이 자주 든다.',
+                '나는 기회만 있으면 자살하겠다.',
+            ],
+            'option_values' => [0, 1, 2, 3],
+            'questions'   => [
+                '요즈음 자살이나 죽음에 대한 생각',
+            ],
+            'single_choice' => true,           // 문항이 1개이며 보기가 곧 응답
+            'scoring' => [
+                ['min' => 0, 'max' => 0, 'label' => '자살사고 없음',      'color' => 'green'],
+                ['min' => 1, 'max' => 1, 'label' => '자살사고 – 경도',    'color' => 'yellow'],
+                ['min' => 2, 'max' => 3, 'label' => '자살사고 – 뚜렷',    'color' => 'black'],
+            ],
+            'cutoff'      => 1,
+            'max_score'   => 3,
+            // 안전 플래그: 1점 이상이면 주의, 2점 이상이면 긴급
+            'flag_item'   => 0,
+            'flag_warn'   => 1,
+            'flag_urgent' => 2,
+            'flag_text'   => '자살사고 문항',
+            'note'        => '벡 우울척도(BDI)의 자살사고(9번) 문항입니다. 1점 이상은 자살에 대한 생각이 있음을 의미하며, 반드시 직접 안전 평가를 시행하십시오. 단독 진단 도구가 아닙니다.',
+            'source'      => 'Beck AT 외 (BDI) 자살사고 문항 / 한국판 BDI. 단독 사용 시 임상 안전평가 병행 필수.',
+        ],
+
+        // ---- 3) S-GDpS : 노인우울척도 단축형 (SGDS-K / GDS-15) ----
+        'S-GDpS' => [
+            'name'        => 'S-GDpS',
+            'full_name'   => '노인우울척도 단축형 (S-GDpS / SGDS-K: Short-form Geriatric Depression Scale)',
+            'category'    => '노인우울',
+            'period'      => '지난 한 주 동안',
+            'layout'      => 'yesno',
+            'response_type' => 'yesno',
+            'instruction' => '지난 한 주 동안 자신의 기분을 잘 나타낸다고 생각되면 「예」, 그렇지 않으면 「아니오」를 선택해 주세요.',
+            'options'     => ['예', '아니오'],       // 선택 인덱스 0=예, 1=아니오
+            'questions'   => [
+                '현재의 생활에 대체적으로 만족하십니까?',
+                '요즈음 들어 활동량이나 의욕이 많이 떨어지셨습니까?',
+                '자신이 헛되이 살고 있다고 느끼십니까?',
+                '생활이 지루하게 느껴질 때가 많습니까?',
+                '평소에 기분은 상쾌한 편이십니까?',
+                '자신에게 불길한 일이 닥칠 것 같아 불안하십니까?',
+                '대체로 마음이 즐거운 편이십니까?',
+                '절망적이라는 느낌이 자주 드십니까?',
+                '바깥에 나가기가 싫고 집에만 있고 싶습니까?',
+                '비슷한 나이의 다른 노인들보다 기억력이 더 나쁘다고 느끼십니까?',
+                '현재 살아 있다는 것이 즐겁게 생각되십니까?',
+                '지금의 내 자신이 아무 쓸모없는 사람이라고 느끼십니까?',
+                '기력이 좋은 편이십니까?',
+                '지금 자신의 처지가 아무런 희망도 없다고 느끼십니까?',
+                '자신이 다른 사람들의 처지보다 더 못하다고 생각하십니까?',
+            ],
+            // item_scores[문항] = [「예」 점수, 「아니오」 점수]
+            // 긍정문항(1,5,7,11,13번 = 0-index 0,4,6,10,12) → 「아니오」가 1점(우울)
+            // 나머지 부정문항 → 「예」가 1점(우울)
+            'item_scores' => [
+                [0, 1], [1, 0], [1, 0], [1, 0], [0, 1],
+                [1, 0], [0, 1], [1, 0], [1, 0], [1, 0],
+                [0, 1], [1, 0], [0, 1], [1, 0], [1, 0],
+            ],
+            'scoring' => [
+                ['min' => 0, 'max' => 4,  'label' => '정상',            'color' => 'green'],
+                ['min' => 5, 'max' => 7,  'label' => '경도 우울 경향',  'color' => 'yellow'],
+                ['min' => 8, 'max' => 15, 'label' => '우울 의심',       'color' => 'black'],
+            ],
+            'cutoff'     => 8,
+            'max_score'  => 15,
+            'note'       => '예/아니오 응답이며 문항마다 채점 방향이 다릅니다(같은 「예」라도 긍정문항은 0점, 부정문항은 1점). 한국판 단축형 노인우울척도(SGDS-K)의 절단점은 8점입니다. 선별도구이며 확정 진단이 아닙니다.',
+            'source'     => 'Sheikh & Yesavage GDS-15 / 한국판 SGDS-K (조맹제 등, 1999). 임상 사용 시 공식 문안 검수 필요.',
+        ],
+
+        // ---- 4) K-MDQ : 한국판 기분장애설문지 (양극성 선별) ----
+        'K-MDQ' => [
+            'name'        => 'K-MDQ',
+            'full_name'   => '한국판 기분장애설문지 (K-MDQ: Korean Mood Disorder Questionnaire)',
+            'category'    => '양극성 선별',
+            'period'      => '과거 어느 시기든',
+            'layout'      => 'yesno',
+            'response_type' => 'yesno',
+            'instruction' => '과거 어느 시기든 아래와 같은 일이 있었고 그런 일이 여러 번 겹쳤던 적이 있었다면 「예」, 없었다면 「아니오」를 선택해 주세요.',
+            'options'     => ['예', '아니오'],       // 선택 인덱스 0=예, 1=아니오
+            'questions'   => [
+                '기분이 너무 좋거나 들떠서 다른 사람들이 “평소의 당신 모습이 아니다”라고 한 적이 있다. 또는 너무 들떠서 문제가 생긴 적이 있다.',
+                '지나치게 흥분해 사람들에게 소리를 지르거나 싸우거나 말다툼을 한 적이 있다.',
+                '평소보다 더욱 자신감에 찬 적이 있다.',
+                '평소보다 잠을 훨씬 덜 자거나 또는 잠잘 필요를 느끼지 않은 적이 있다.',
+                '평소보다 말이 더 많았거나 말이 매우 빨라졌던 적이 있다.',
+                '생각이 머릿속에서 빠르게 돌아가는 것처럼 느꼈거나 마음을 차분하게 하지 못한 적이 있다.',
+                '주위에서 벌어지는 일로 매우 쉽게 방해받아 하던 일에 집중하기 어려웠거나 할 일을 계속하지 못한 적이 있다.',
+                '평소보다 훨씬 에너지가 넘쳤던 적이 있다.',
+                '평소보다 크게 활동적이었거나 더 많은 일을 한 적이 있다.',
+                '평소보다 부쩍 사교적이거나 적극적(외향적)이었던 적이 있다. 예를 들면 한밤중에 친구들에게 전화를 했다.',
+                '평소보다 더욱 성(性)적인 일에 관심이 간 적이 있다.',
+                '평소의 당신과는 맞지 않는 행동을 했거나, 남들이 보기에 지나치거나 바보 같거나 위험한 행동을 한 적이 있다.',
+                '돈 쓰는 문제로 자신이나 가족을 곤경에 빠뜨린 적이 있다.',
+            ],
+            // 각 문항 「예」=1점, 「아니오」=0점 (예 개수 합산)
+            'item_scores' => [
+                [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0],
+                [1, 0], [1, 0], [1, 0], [1, 0], [1, 0], [1, 0],
+            ],
+            'scoring' => [
+                ['min' => 0, 'max' => 6,  'label' => '선별 음성', 'color' => 'green'],
+                ['min' => 7, 'max' => 13, 'label' => '선별 양성', 'color' => 'black'],
+            ],
+            'cutoff'     => 7,
+            'max_score'  => 13,
+            'note'       => '양극성 장애(조증·경조증) 선별도구입니다. 13개 문항 중 7개 이상 「예」이면 선별 양성입니다(한국판 절단점 7점). 원판은 증상의 동시 발생·기능 손상 문항을 추가로 평가합니다. 선별 양성은 확정 진단이 아니며 정신건강의학과 평가가 필요합니다.',
+            'source'     => '전덕인 외(2009) K-MDQ 타당화 / 원판 Hirschfeld RMA(2000). 임상 사용 시 공식 문안 검수 필요.',
+        ],
+
+        // ---- 5) SSD-12 : 신체증상장애 B기준 척도 ----
+        'SSD-12' => [
+            'name'        => 'SSD-12',
+            'full_name'   => '신체증상장애 B기준 척도 (SSD-12: Somatic Symptom Disorder–B Criteria Scale)',
+            'category'    => '신체증상장애',
+            'period'      => '최근',
+            'layout'      => 'segment',
+            'instruction' => '아래 문항은 두통·통증·소화불량 등 최근 겪고 있는 신체 증상에 대해 평소 어떻게 생각하고 느끼며 행동하는지를 묻습니다. 옳고 그른 답은 없으며 증상의 원인도 중요하지 않습니다. 최근 자신을 가장 잘 나타내는 정도를 하나 선택해 주세요.',
+            'options'       => ['전혀', '드물게', '가끔', '자주', '매우 자주'],
+            'option_values' => [0, 1, 2, 3, 4],
+            'questions'   => [
+                '나는 나의 신체 증상이 심각한 질병의 신호라고 생각한다.',
+                '나는 나의 건강에 대해 걱정을 많이 한다.',
+                '나는 건강에 대한 걱정 때문에 일상생활에서 지장을 받는다.',
+                '나는 나의 증상이 심각한 상태라고 확신한다.',
+                '신체 증상을 떠올리면 마음이 쉽게 불안해진다.',
+                '몸의 증상을 확인하거나 점검하는 데 많은 시간을 쓴다.',
+                '나는 내 몸에 심각한 문제가 생긴 것은 아닌지 자주 되짚어 본다.',
+                '내 건강 상태가 나빠질 것 같은 두려움이 지속된다.',
+                '증상의 원인을 찾기 위해 정보 검색이나 의료기관 방문에 많은 에너지를 쏟는다.',
+                '내 몸의 증상이 의학적으로 중대한 진단으로 이어질까 봐 걱정스럽다.',
+                '증상이 나타날 때마다 통제할 수 없을 것 같은 불안을 느낀다.',
+                '신체적인 불편감 때문에 계획했던 일이나 사회적 활동을 자주 취소한다.',
+            ],
+            // 하위영역(각 0~16점): 인지 1·4·7·10 / 정서 2·5·8·11 / 행동 3·6·9·12 (0-index)
+            'subscales' => [
+                ['name' => '인지', 'items' => [0, 3, 6, 9]],
+                ['name' => '정서', 'items' => [1, 4, 7, 10]],
+                ['name' => '행동', 'items' => [2, 5, 8, 11]],
+            ],
+            'scoring' => [
+                ['min' => 0,  'max' => 17, 'label' => '정상군',        'color' => 'green'],
+                ['min' => 18, 'max' => 28, 'label' => '주의군',        'color' => 'yellow'],
+                ['min' => 29, 'max' => 48, 'label' => '임상적 위험군', 'color' => 'black'],
+            ],
+            'cutoff'     => 23,
+            'max_score'  => 48,
+            'note'       => '선별도구이며 단독으로 신체증상장애를 진단할 수 없습니다. DSM-5의 A기준(증상 존재)·C기준(6개월 이상 지속) 확인과 임상 면담이 필요합니다. 위 구간(0–17 정상 / 18–28 주의 / 29+ 위험)은 종합병원 정신건강의학과 외래 표본 기준이며, 국제 문헌에서는 23점 절단점도 널리 사용됩니다.',
+            'source'     => 'Toussaint A 외(2016) Psychosom Med (SSD-12). 한국어판 사용 시 저작권자 승인 필요.',
         ],
     ];
 }
 
+// ---------------------------------------------------------------------------
+// 색상 → HEX 매핑 (환자 불안 완화: 중한 결과는 붉은색 대신 검정 계열로 표현)
+//   green/yellow/orange 는 유지, red/darkred/black 은 모두 검정 계열로 통일
+// ---------------------------------------------------------------------------
+if (!function_exists('scaleColorHex')) {
+    function scaleColorHex(string $color, string $variant = 'solid'): string {
+        // solid: 배지/막대 배경, text: 글자색, tint: 옅은 배경
+        $map = [
+            'green'   => ['solid' => '#27ae60', 'text' => '#1b7a43', 'tint' => '#eafaf1'],
+            'yellow'  => ['solid' => '#e0a800', 'text' => '#8a6100', 'tint' => '#fff8e6'],
+            'orange'  => ['solid' => '#e67e22', 'text' => '#9a4a12', 'tint' => '#fdecdd'],
+            // 중한 결과: 검정 계열 (붉은색 대체)
+            'black'   => ['solid' => '#4b5563', 'text' => '#4b5563', 'tint' => '#ececec'],
+            'red'     => ['solid' => '#4b5563', 'text' => '#4b5563', 'tint' => '#ececec'],
+            'darkred' => ['solid' => '#4b5563', 'text' => '#4b5563', 'tint' => '#ececec'],
+        ];
+        return $map[$color][$variant] ?? ($variant === 'text' ? '#1a2236' : '#3b6cb7');
+    }
+}
+
 // 점수 계산 함수
+// $answers: 문항 순서대로 "선택한 보기의 인덱스"(정수). yesno 는 0=예, 1=아니오.
 function calculateScore(string $scaleType, array $answers): array {
     $scales = getScales();
-    $scale  = $scales[$scaleType];
+    $scale  = $scales[$scaleType] ?? [];
     $total  = 0;
 
+    $itemScores = $scale['item_scores']   ?? null;
+    $reverse    = $scale['reverse_items'] ?? [];
+    $maxVal     = !empty($scale['option_values']) ? max($scale['option_values']) : 0;
+
     foreach ($answers as $i => $val) {
+        $i   = (int)$i;
         $val = (int)$val;
-        if (isset($scale['reverse_items']) && in_array((int)$i, $scale['reverse_items'])) {
-            $maxVal = max($scale['option_values']);
-            $val    = $maxVal - $val;
+        if ($itemScores !== null && isset($itemScores[$i])) {
+            // 선택 인덱스 → 점수 (같은 응답이라도 문항마다 다른 점수 가능)
+            $score = $itemScores[$i][$val] ?? 0;
+        } elseif (in_array($i, $reverse, true)) {
+            $score = $maxVal - $val;               // 역채점 (PSS-10)
+        } else {
+            $score = $val;                         // 값 == 인덱스
         }
-        $total += $val;
+        $total += $score;
     }
 
     $label = '';
     $color = '';
-    foreach ($scale['scoring'] as $range) {
+    foreach (($scale['scoring'] ?? []) as $range) {
         if ($total >= $range['min'] && $total <= $range['max']) {
             $label = $range['label'];
             $color = $range['color'];
@@ -122,5 +378,38 @@ function calculateScore(string $scaleType, array $answers): array {
         }
     }
 
-    return ['total' => $total, 'label' => $label, 'color' => $color];
+    // 하위영역(subscale) 점수
+    $subscales = [];
+    if (!empty($scale['subscales'])) {
+        foreach ($scale['subscales'] as $sub) {
+            $sum = 0;
+            foreach ($sub['items'] as $qi) {
+                $v = (int)($answers[$qi] ?? 0);
+                if ($itemScores !== null && isset($itemScores[$qi])) {
+                    $sum += $itemScores[$qi][$v] ?? 0;
+                } elseif (in_array($qi, $reverse, true)) {
+                    $sum += $maxVal - $v;
+                } else {
+                    $sum += $v;
+                }
+            }
+            $subscales[] = ['name' => $sub['name'], 'score' => $sum, 'items' => $sub['items']];
+        }
+    }
+
+    // 안전 플래그 (BDI-9 등 자살사고 문항)
+    $flag = null;
+    if (isset($scale['flag_item'])) {
+        $fi = (int)$scale['flag_item'];
+        $fv = (int)($answers[$fi] ?? 0);
+        // flag_item 은 인덱스가 곧 심각도(BDI-9 단일문항)
+        $ft = $scale['flag_text'] ?? '';
+        if (isset($scale['flag_urgent']) && $fv >= $scale['flag_urgent']) {
+            $flag = ['level' => 'urgent', 'text' => "{$ft} {$fv}점 — 즉각적 안전 평가 필요"];
+        } elseif (isset($scale['flag_warn']) && $fv >= $scale['flag_warn']) {
+            $flag = ['level' => 'warn', 'text' => "{$ft} {$fv}점 — 추가 임상 판단 필요"];
+        }
+    }
+
+    return ['total' => $total, 'label' => $label, 'color' => $color, 'subscales' => $subscales, 'flag' => $flag];
 }

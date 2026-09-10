@@ -66,6 +66,10 @@ if ($actualCount !== $expectedCount) {
 
 try {
     $scored = calculateScore($scaleType, array_values($answers));
+    // 하위영역(subscale)이 있는 척도(SSD-12 등)는 factor_scores(JSON)에 저장
+    $factorScores = !empty($scored['subscales'])
+        ? json_encode(['subscales' => $scored['subscales'], 'flag' => $scored['flag'] ?? null], JSON_UNESCAPED_UNICODE)
+        : null;
     $db     = getDB();
 
     // 환자 조회/생성 (이름 + 생년월일 기준)
@@ -93,8 +97,8 @@ try {
         $savedId = $assessmentId;
     } else {
         $stmt = $db->prepare(
-            'INSERT INTO assessments (patient_id, scale_type, answers, total_score, result_label, memo, admin_id, battery_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO assessments (patient_id, scale_type, answers, total_score, result_label, memo, admin_id, battery_id, factor_scores)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $stmt->execute([
             $patientId,
@@ -105,6 +109,7 @@ try {
             $memo,
             (int)$_SESSION['admin_id'],
             $batteryId ?: null,
+            $factorScores,
         ]);
         $savedId = (int)$db->lastInsertId();
     }

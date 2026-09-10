@@ -19,7 +19,7 @@ if ($bid !== '') {
     $stmt = $db->prepare(
         'SELECT a.*, p.name AS p_name, p.birth_date, p.gender, p.phone
          FROM assessments a JOIN patients p ON p.id = a.patient_id
-         WHERE a.battery_id = ? ORDER BY a.created_at ASC'
+         WHERE a.battery_id = ? AND a.deleted_at IS NULL ORDER BY a.created_at ASC'
     );
     $stmt->execute([$bid]);
     $rows = $stmt->fetchAll();
@@ -39,7 +39,8 @@ usort($rows, fn($x, $y) => ($order[$x['scale_type']] ?? 99) <=> ($order[$y['scal
 
 $scales   = getScales();
 $psqiMeta = getPsqiMeta();
-$colorHex = ['green' => '#27ae60', 'yellow' => '#e0a800', 'red' => '#c0392b', '' => '#3b6cb7'];
+// 중한 결과는 붉은색 대신 검정 계열로 표현
+$colorHex = ['green' => '#27ae60', 'yellow' => '#e0a800', 'orange' => '#e67e22', 'red' => '#4b5563', 'darkred' => '#4b5563', 'black' => '#4b5563', '' => '#3b6cb7'];
 
 $visitDate = $rows ? date('Y-m-d H:i', strtotime($rows[0]['created_at'])) : '';
 $age = $patient ? ageFromBirth($patient['birth']) : null;
@@ -191,7 +192,7 @@ html,body{font-family:'Apple SD Gothic Neo','Noto Sans KR',sans-serif;color:var(
         <div class="comp-list">
           <?php foreach ($r['components'] as $c):
             $w = round($c['score'] / 3 * 100);
-            $cc = $c['score'] >= 2 ? '#c0392b' : ($c['score'] === 1 ? '#e0a800' : '#27ae60');
+            $cc = $c['score'] >= 2 ? '#4b5563' : ($c['score'] === 1 ? '#e0a800' : '#27ae60');
           ?>
           <div class="comp-row">
             <div><?= htmlspecialchars($c['name']) ?></div>
@@ -209,7 +210,7 @@ html,body{font-family:'Apple SD Gothic Neo','Noto Sans KR',sans-serif;color:var(
         <div class="comp-list">
           <?php foreach ($it['csei'] as $f):
             $w = min(100, round($f['tScore']));
-            $cc = $f['group']==='risk' ? '#c0392b' : ($f['group']==='caution' ? '#e0a800' : '#27ae60');
+            $cc = $f['group']==='risk' ? '#4b5563' : ($f['group']==='caution' ? '#e0a800' : '#27ae60');
           ?>
           <div style="display:grid;grid-template-columns:52px 50px 1fr 40px;align-items:center;gap:10px;font-size:.82rem;">
             <div style="font-weight:600;"><?= htmlspecialchars($f['name']) ?></div>

@@ -47,21 +47,22 @@ function interpret(array $row, array $scales, array $psqiMeta): array {
 
     $s = $scales[$type] ?? null;
     $sc = calculateScore($type, $answers);
-    $flag = null;
+    $flag = $sc['flag'] ?? null;   // BDI-9 등 자살사고 플래그
     if ($type === 'PHQ-9') {
         $q9 = (int)($answers[8] ?? 0); // 9번(자해·자살 사고)
         if ($q9 >= 2)      $flag = ['level' => 'urgent', 'text' => '9번 문항(자해·자살 사고) ' . $q9 . '점 — 즉각적 안전 평가 필요'];
         elseif ($q9 >= 1)  $flag = ['level' => 'warn',   'text' => '9번 문항(자해·자살 사고) ' . $q9 . '점 — 추가 임상 판단 필요'];
     }
     return [
-        'total'  => $sc['total'],
-        'max'    => $s['max_score'] ?? null,
-        'label'  => $sc['label'],
-        'color'  => $sc['color'],
-        'cutoff' => $s['cutoff'] ?? null,
-        'poor'   => ($s['cutoff'] ?? null) !== null ? ($sc['total'] >= $s['cutoff']) : null,
-        'psqi'   => null,
-        'flag'   => $flag,
+        'total'     => $sc['total'],
+        'max'       => $s['max_score'] ?? null,
+        'label'     => $sc['label'],
+        'color'     => $sc['color'],
+        'cutoff'    => $s['cutoff'] ?? null,
+        'poor'      => ($s['cutoff'] ?? null) !== null ? ($sc['total'] >= $s['cutoff']) : null,
+        'psqi'      => null,
+        'flag'      => $flag,
+        'subscales' => $sc['subscales'] ?? [],
     ];
 }
 
@@ -73,6 +74,11 @@ function buildEmrLine(array $row, array $it, ?array $scales = null, ?array $psqi
         'PSS-10' => '스트레스',
         'PSQI-K' => '수면의 질',
         'CSEI-s' => '핵심칠정 감정',
+        'PHQ-15' => '신체증상',
+        'BDI-9'  => '자살사고 선별',
+        'S-GDpS' => '노인우울 선별',
+        'K-MDQ'  => '양극성 선별',
+        'SSD-12' => '신체증상장애 B기준',
     ];
     $type = $row['scale_type'];
     $full = $scaleFullNames[$type] ?? '';
@@ -113,6 +119,11 @@ function buildEmrLine(array $row, array $it, ?array $scales = null, ?array $psqi
         if ($r['hours_in_bed'] !== null) $extra[] = "실 수면시간 " . ($row['answers_decoded'][3] ?? '?') . "시간";
         if ($r['efficiency'] !== null)   $extra[] = "수면효율 {$r['efficiency']}%";
         if ($extra) $line .= "\n   - " . implode(', ', $extra) . '.';
+    }
+
+    if (!empty($it['subscales'])) {
+        $parts = array_map(fn($su) => "{$su['name']} {$su['score']}", $it['subscales']);
+        $line .= "\n   - 하위영역: " . implode(', ', $parts) . '.';
     }
 
     if ($it['flag']) {

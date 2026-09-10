@@ -87,6 +87,7 @@ $batteryTotal = count($queue);
 $batteryStep  = $qpos + 1; // 1-indexed
 $isLastStep   = ($batteryStep >= $batteryTotal);
 $nextUrl      = 'run.php?next=1';
+$isMale       = ($gender === '남');
 ?>
 <!DOCTYPE html>
 <html lang="ko">
@@ -98,7 +99,6 @@ $nextUrl      = 'run.php?next=1';
 (function(){
   var saved = null;
   try { saved = localStorage.getItem('theme'); } catch(e) {}
-  // 기본값은 항상 라이트 모드 — 사용자가 토글로 명시적으로 다크를 선택했을 때만 전환
   if (saved === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
 })();
 </script>
@@ -108,11 +108,12 @@ $nextUrl      = 'run.php?next=1';
   --bg:#f8f9fa;--card:#fff;--surface:#f8fafd;--primary:#3b82f6;--primary-dark:#1d4ed8;
   --text:#111827;--muted:#6b7a99;--border:#dce3ef;--tint:#eef2fb;
   --radius:12px;--shadow:0 4px 24px rgba(59,108,183,.10);
+  --severe:#4b5563;  /* 중한 결과: 붉은색 대신 검정 계열 */
 }
 html[data-theme="dark"]{
   --bg:#121212;--card:#1e1e24;--surface:#26262e;--primary:#3b82f6;--primary-dark:#60a5fa;
   --text:#f9fafb;--muted:#9ca3af;--border:#33333d;--tint:#1c2333;
-  --shadow:0 4px 24px rgba(0,0,0,.35);
+  --shadow:0 4px 24px rgba(0,0,0,.35);--severe:#f9fafb;
 }
 html,body{height:100%;font-family:'Apple SD Gothic Neo','Noto Sans KR',sans-serif;color:var(--text);}
 body{background:var(--bg);display:flex;flex-direction:column;min-height:100vh;transition:background .2s ease,color .2s ease;}
@@ -125,43 +126,53 @@ body{background:var(--bg);display:flex;flex-direction:column;min-height:100vh;tr
 .admin-badge{font-size:.75rem;color:var(--muted);}
 .theme-toggle{background:none;border:1.5px solid var(--border);color:var(--text);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:.9rem;display:flex;align-items:center;justify-content:center;font-family:inherit;}
 
-/* 레이아웃: 화면 꽉 채우기 */
-.main{flex:1;display:flex;flex-direction:column;padding:16px;max-width:700px;width:100%;margin:0 auto;}
+/* ===== 2단 레이아웃: 왼쪽 사이드바(검사 안내) + 오른쪽 문항 ===== */
+.layout{flex:1;display:flex;gap:18px;max-width:1080px;width:100%;margin:0 auto;padding:16px;align-items:flex-start;}
+.sidebar{width:300px;flex-shrink:0;position:sticky;top:72px;display:flex;flex-direction:column;gap:12px;}
+.content{flex:1;min-width:0;display:flex;flex-direction:column;}
 
-/* 상단 정보 바: 한 줄 인라인 배지 */
-.info-bar{font-size:.78rem;color:var(--muted);padding:8px 2px 14px;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;}
-.info-bar b{color:var(--text);font-weight:700;}
-.info-bar .sep{color:var(--border);}
-.info-bar .ok{color:#16a34a;font-weight:700;}
+/* 사이드바: 검사 이름 + 응답 기간 + 문항박스(안내) */
+.sb-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;}
+.sb-scale-name{font-size:1.5rem;font-weight:800;color:var(--primary);line-height:1.2;}
+.sb-scale-full{font-size:.78rem;color:var(--muted);margin-top:6px;line-height:1.5;}
+.sb-period-box{margin-top:14px;background:var(--tint);border:1.5px solid var(--primary);border-radius:12px;padding:12px 14px;text-align:center;}
+.sb-period-label{font-size:.72rem;color:var(--muted);font-weight:700;letter-spacing:.03em;}
+.sb-period-value{font-size:1.15rem;font-weight:800;color:var(--primary);margin-top:2px;}
+.sb-guide-title{font-size:.74rem;font-weight:800;color:var(--muted);margin:16px 0 6px;letter-spacing:.03em;display:flex;align-items:center;gap:6px;}
+.sb-guide{background:var(--surface);border-left:4px solid var(--primary);border-radius:0 8px 8px 0;padding:11px 13px;font-size:.86rem;color:var(--text);line-height:1.65;}
+.sb-progress{margin-top:14px;}
+.sb-progress-label{display:flex;justify-content:space-between;font-size:.76rem;color:var(--muted);margin-bottom:6px;font-weight:600;}
+.sb-progress-bar{height:8px;background:var(--border);border-radius:99px;overflow:hidden;}
+.sb-progress-fill{height:100%;background:var(--primary);border-radius:99px;transition:width .3s;}
+
+/* 사이드바 환자정보/취소 */
+.sb-patient{font-size:.82rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;}
+.sb-patient b{color:var(--text);}
+.sb-patient .ok{color:#16a34a;font-weight:700;}
+.cancel-btn{width:100%;margin-top:4px;padding:11px;border-radius:10px;border:1.5px solid var(--border);background:var(--surface);color:var(--muted);font-family:inherit;font-size:.86rem;font-weight:700;cursor:pointer;transition:all .2s;}
+.cancel-btn:hover{border-color:var(--severe);color:var(--severe);}
+
+/* 척도 선택 탭 (단일 검사·다중 선택 시) */
+.scale-tabs{display:flex;flex-wrap:wrap;gap:6px;}
+.scale-tab{flex:1 1 auto;min-width:70px;padding:8px 6px;border:2px solid var(--border);border-radius:9px;background:var(--surface);cursor:pointer;text-align:center;transition:all .2s;}
+.scale-tab.active{border-color:var(--primary);background:var(--tint);}
+.scale-tab input{display:none;}
+.tab-name{font-weight:700;font-size:.82rem;color:var(--primary);}
+.tab-desc{font-size:.68rem;color:var(--muted);margin-top:1px;}
 
 /* 카드 */
 .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin-bottom:12px;}
-
-/* 척도 탭 */
-.scale-tabs{display:flex;gap:8px;margin-bottom:16px;}
-.scale-tab{flex:1;padding:10px;border:2px solid var(--border);border-radius:9px;background:var(--surface);cursor:pointer;text-align:center;transition:all .2s;}
-.scale-tab.active{border-color:var(--primary);background:var(--tint);}
-.scale-tab input{display:none;}
-.tab-name{font-weight:700;font-size:.95rem;color:var(--primary);}
-.tab-desc{font-size:.72rem;color:var(--muted);margin-top:2px;}
-
-/* 진행 바 */
-.progress-wrap{margin-bottom:16px;}
-.progress-label{display:flex;justify-content:space-between;font-size:.78rem;color:var(--muted);margin-bottom:6px;}
-.progress-bar{height:5px;background:var(--border);border-radius:99px;overflow:hidden;}
-.progress-fill{height:100%;background:var(--primary);border-radius:99px;transition:width .3s;}
 
 /* 문항 */
 .scale-section{display:none;}
 .scale-section.active{display:block;}
 .question-slide{display:none;}
 .question-slide.active{display:block;}
-.instruction{background:var(--tint);border-left:4px solid var(--primary);padding:10px 14px;border-radius:0 8px 8px 0;font-size:.85rem;color:var(--text);margin-bottom:14px;line-height:1.6;}
-.q-card{background:var(--surface);border:1.5px solid var(--border);border-radius:11px;padding:20px 18px;margin-bottom:12px;text-align:center;}
-.q-number{font-size:.75rem;font-weight:700;color:var(--primary);margin-bottom:10px;letter-spacing:.05em;}
-.q-text{font-size:1.15rem;font-weight:700;line-height:1.6;color:var(--text);margin-bottom:20px;}
+.q-card{background:var(--surface);border:1.5px solid var(--border);border-radius:11px;padding:24px 18px;margin-bottom:12px;text-align:center;}
+.q-number{font-size:.78rem;font-weight:700;color:var(--primary);margin-bottom:12px;letter-spacing:.05em;}
+.q-text{font-size:1.2rem;font-weight:700;line-height:1.6;color:var(--text);margin-bottom:22px;}
 
-/* 리커트 세그먼트 바 */
+/* 리커트 세그먼트 바 (짧은 보기: PHQ/GAD/PSS/PHQ-15/SSD-12) */
 .q-options{display:flex;gap:6px;}
 .q-option-btn{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:0;border:none;background:none;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;}
 .seg-block{width:100%;min-height:72px;border-radius:16px;background:var(--seg-bg);display:flex;align-items:center;justify-content:center;transition:transform .15s ease,box-shadow .2s ease;}
@@ -172,34 +183,52 @@ body{background:var(--bg);display:flex;flex-direction:column;min-height:100vh;tr
 .seg-label{font-size:.88rem;font-weight:600;color:var(--muted);text-align:center;line-height:1.3;}
 .q-option-btn.selected .seg-label{color:var(--text);font-weight:800;}
 
+/* 세로 버튼 (긴 보기: BDI-9) */
+.q-vert{display:flex;flex-direction:column;gap:10px;}
+.vbtn{width:100%;padding:16px 18px;border:2px solid var(--border);border-radius:12px;background:var(--card);cursor:pointer;font-size:1rem;font-weight:600;color:var(--text);transition:all .15s;text-align:left;font-family:inherit;line-height:1.5;-webkit-tap-highlight-color:transparent;}
+.vbtn:hover{border-color:var(--primary);background:var(--tint);}
+.vbtn.selected{border-color:var(--primary);background:var(--primary);color:#fff;}
+
+/* 예/아니오 큰 버튼 (S-GDpS, K-MDQ) */
+.q-yesno{display:flex;gap:12px;}
+.ynbtn{flex:1;min-height:96px;border:2.5px solid var(--border);border-radius:16px;background:var(--card);cursor:pointer;font-size:1.5rem;font-weight:800;color:var(--text);transition:all .15s;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:10px;-webkit-tap-highlight-color:transparent;}
+.ynbtn .yn-ico{font-size:1.7rem;}
+.ynbtn:hover{border-color:var(--primary);background:var(--tint);}
+.ynbtn.selected{border-color:var(--primary);background:var(--primary);color:#fff;}
+
 /* 완료 화면 */
 .complete-screen{display:none;text-align:center;padding:10px 0;}
 .complete-screen.active{display:block;}
-.complete-icon{font-size:2.5rem;margin-bottom:10px;}
 .complete-score{font-size:2.8rem;font-weight:800;color:var(--primary);margin-bottom:4px;}
-.complete-label{font-size:1rem;font-weight:700;color:var(--primary);margin-bottom:18px;}
-textarea{width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:.875rem;color:var(--text);background:var(--surface);outline:none;font-family:inherit;resize:vertical;min-height:70px;}
+.complete-label{font-size:1.1rem;font-weight:700;color:var(--primary);margin-bottom:14px;}
+.flag-note{display:none;text-align:left;border-radius:10px;padding:14px 16px;margin-bottom:14px;font-size:.9rem;line-height:1.6;}
+.flag-note.warn{background:#fff8e6;border:2px solid #e0a800;color:#7d5a00;}
+.flag-note.urgent{background:#ececec;border:2px solid var(--severe);color:var(--severe);font-weight:700;}
+textarea{width:100%;padding:10px 13px;border:1.5px solid var(--border);border-radius:8px;font-size:.9rem;color:var(--text);background:var(--surface);outline:none;font-family:inherit;resize:vertical;min-height:70px;}
 textarea:focus{border-color:var(--primary);}
 
 /* 네비 버튼 */
 .nav-btns{display:flex;gap:10px;margin-top:8px;}
-.btn{padding:12px 0;border-radius:12px;font-size:.9rem;font-weight:700;cursor:pointer;border:none;transition:all .2s;font-family:inherit;flex:1;}
+.btn{padding:14px 0;border-radius:12px;font-size:.95rem;font-weight:700;cursor:pointer;border:none;transition:all .2s;font-family:inherit;flex:1;}
 .btn-primary{background:var(--primary);color:#fff;}
 .btn-primary:hover{background:var(--primary-dark);}
 .btn-secondary{background:var(--surface);color:var(--text);border:1.5px solid var(--border);}
 .btn-secondary:hover{background:var(--border);}
 .btn:disabled{opacity:.4;cursor:not-allowed;}
-.save-status-box{min-height:28px;padding:6px 0;font-size:.875rem;margin-bottom:8px;}
+.save-status-box{min-height:28px;padding:6px 0;font-size:.9rem;margin-bottom:8px;}
 
 /* 돋보기 / 글자 크기 */
-.zoom-btn,.float-btn{position:fixed;right:20px;width:48px;height:48px;border-radius:50%;background:var(--primary);color:#fff;border:none;font-size:1.3rem;cursor:pointer;box-shadow:0 4px 12px rgba(59,108,183,.4);display:flex;align-items:center;justify-content:center;z-index:999;transition:all .2s;text-decoration:none;}
+.zoom-btn,.float-btn{position:fixed;right:20px;width:52px;height:52px;border-radius:50%;background:var(--primary);color:#fff;border:none;font-size:1.4rem;cursor:pointer;box-shadow:0 4px 12px rgba(59,108,183,.4);display:flex;align-items:center;justify-content:center;z-index:999;transition:all .2s;text-decoration:none;}
 .zoom-btn{bottom:20px;}
 .zoom-btn:hover,.float-btn:hover{background:var(--primary-dark);transform:scale(1.1);}
-.zoom-tooltip{position:fixed;bottom:76px;right:14px;background:#1a2236;color:#fff;border-radius:8px;padding:8px 12px;font-size:.8rem;display:none;white-space:nowrap;z-index:999;}
-body.font-lg .q-text{font-size:1.4rem !important;}
+.zoom-tooltip{position:fixed;bottom:80px;right:14px;background:#1a2236;color:#fff;border-radius:8px;padding:8px 12px;font-size:.8rem;display:none;white-space:nowrap;z-index:999;}
+body.font-lg .q-text{font-size:1.5rem !important;}
 body.font-lg .seg-label{font-size:1.05rem !important;font-weight:700 !important;}
 body.font-lg .seg-block{min-height:84px !important;}
-body.font-lg .instruction{font-size:1rem !important;}
+body.font-lg .vbtn{font-size:1.15rem !important;padding:18px 20px !important;}
+body.font-lg .ynbtn{font-size:1.7rem !important;min-height:110px !important;}
+body.font-lg .sb-guide{font-size:1rem !important;}
+body.font-lg .sb-period-value{font-size:1.3rem !important;}
 body.font-lg .q-number{font-size:.9rem !important;}
 
 /* 성공 */
@@ -210,15 +239,30 @@ body.font-lg .q-number{font-size:.9rem !important;}
 .btn-new{background:var(--primary);color:#fff;}
 .btn-hist{background:var(--bg);color:var(--text);border:1.5px solid var(--border);}
 
-@media(min-width:768px){
-  .main{padding:20px 24px;}
+/* 취소 확인 모달 */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;padding:20px;}
+.modal-overlay.open{display:flex;}
+.modal-box{background:var(--card);border-radius:16px;max-width:380px;width:100%;padding:24px;box-shadow:0 12px 48px rgba(0,0,0,.3);text-align:center;}
+.modal-box h3{font-size:1.1rem;font-weight:800;margin-bottom:10px;}
+.modal-box p{font-size:.9rem;color:var(--muted);line-height:1.6;margin-bottom:20px;}
+.modal-btns{display:flex;gap:10px;}
+
+/* ===== 반응형: 태블릿·모바일에서 사이드바를 상단 카드로 ===== */
+@media(max-width:860px){
+  .layout{flex-direction:column;gap:12px;padding:12px;}
+  .sidebar{width:100%;position:static;top:auto;}
+  .sb-scale-name{font-size:1.3rem;}
+}
+@media(min-width:861px){
+  .q-options{gap:8px;}
   .seg-block{min-height:88px;}
-  .seg-label{font-size:.95rem;}
 }
 @media(max-width:380px){
   .q-options{gap:4px;}
   .seg-block{min-height:64px;border-radius:12px;}
   .seg-label{font-size:.76rem;}
+  .q-yesno{gap:8px;}
+  .ynbtn{min-height:80px;font-size:1.3rem;}
 }
 </style>
   <?php include __DIR__ . '/pwa_head.php'; ?>
@@ -239,125 +283,161 @@ body.font-lg .q-number{font-size:.9rem !important;}
   </nav>
 </header>
 
-<div class="main">
-
-<?php if ($error): ?>
-<div class="alert-error"><?= htmlspecialchars($error) ?></div>
-<?php endif; ?>
-
 <?php if ($success): ?>
+<div class="layout"><div style="flex:1;">
 <div class="alert-success"><?= htmlspecialchars($success) ?> — <a href="history.php" style="color:#1e8449;font-weight:700;">이력 보기 →</a></div>
 <div class="result-actions">
   <a href="consent.php?step=1" class="btn-new result-actions">새 검사 입력</a>
   <a href="history.php" class="btn-hist result-actions">이력 조회</a>
   <a href="graph.php" class="btn-hist result-actions">그래프 보기</a>
 </div>
+</div></div>
+
+<?php elseif ($error): ?>
+<div class="layout"><div style="flex:1;"><div class="alert-error"><?= htmlspecialchars($error) ?></div>
+<a href="consent.php?step=1" class="btn-new result-actions" style="display:inline-block;padding:12px 20px;border-radius:8px;text-decoration:none;">← 검사 다시 시작</a></div></div>
 
 <?php else: ?>
 
-<!-- 환자 정보 바 (한 줄 인라인 배지) -->
-<?php if ($initPatient):
-  require_once __DIR__ . '/patient_store.php';
-  $agev = ageFromBirth($birthDate ?? null);
-?>
-<div class="info-bar">
-  <b><?= htmlspecialchars($initPatient) ?></b>
-  <?php if (($consentData['gender'] ?? '') || $agev !== null): ?>
-    <span class="sep">|</span>
-    <span><?= htmlspecialchars($consentData['gender'] ?? '') ?><?= $agev !== null ? ' ' . $agev . '세' : '' ?></span>
-  <?php endif; ?>
-  <?php if ($battery && $batteryTotal > 1): ?>
-    <span class="sep">|</span>
-    <span>검사 <?= $batteryStep ?> / <?= $batteryTotal ?><?php if (!$isLastStep && isset($queue[$qpos+1])): ?> (다음: <?= htmlspecialchars($queue[$qpos+1]) ?>)<?php endif; ?></span>
-  <?php endif; ?>
-  <span class="sep">|</span>
-  <span id="dt_bar"></span>
-  <span class="sep">|</span>
-  <span class="ok">동의 완료</span>
-</div>
-<?php endif; ?>
+<div class="layout">
+  <!-- ===== 왼쪽 사이드바: 검사 이름 + 응답 기간 + 문항박스(안내) ===== -->
+  <aside class="sidebar">
+    <?php if (!$battery && count($scales) > 1): ?>
+    <div class="sb-card" style="padding:12px;">
+      <div class="sb-guide-title">📋 검사 선택</div>
+      <div class="scale-tabs">
+        <?php foreach ($scales as $key => $scale): ?>
+        <label class="scale-tab <?= $key === $initScale ? 'active' : '' ?>">
+          <input type="radio" name="scale_type_ui" value="<?= $key ?>"
+                 <?= $key === $initScale ? 'checked' : '' ?> onchange="switchScale('<?= $key ?>')">
+          <div class="tab-name"><?= $key ?></div>
+          <div class="tab-desc"><?= htmlspecialchars($scale['category'] ?? '') ?></div>
+        </label>
+        <?php endforeach; ?>
+      </div>
+    </div>
+    <?php endif; ?>
 
-<div class="card">
-  <!-- 척도 탭 (단일 검사일 때만; 연속검사에서는 숨김) -->
-  <?php if (!$battery): ?>
-  <div class="scale-tabs">
-    <?php foreach ($scales as $key => $scale): ?>
-    <label class="scale-tab <?= $key === $initScale ? 'active' : '' ?>">
-      <input type="radio" name="scale_type_ui" value="<?= $key ?>"
-             <?= $key === $initScale ? 'checked' : '' ?> onchange="switchScale('<?= $key ?>')">
-      <div class="tab-name"><?= $key ?></div>
-      <div class="tab-desc"><?= $key==='PHQ-9'?'우울':($key==='GAD-7'?'불안':'스트레스') ?></div>
-    </label>
-    <?php endforeach; ?>
-  </div>
-  <?php endif; ?>
+    <div class="sb-card">
+      <div class="sb-scale-name" id="sb-name"><?= htmlspecialchars($initScale) ?></div>
+      <div class="sb-scale-full" id="sb-full"></div>
+      <div class="sb-period-box">
+        <div class="sb-period-label">응답 기간</div>
+        <div class="sb-period-value" id="sb-period">—</div>
+      </div>
+      <div class="sb-guide-title">📝 문항 안내</div>
+      <div class="sb-guide" id="sb-guide">—</div>
+      <div class="sb-progress">
+        <div class="sb-progress-label">
+          <span id="sb-ptxt">1 / 1</span>
+          <span id="sb-ppct">0%</span>
+        </div>
+        <div class="sb-progress-bar"><div class="sb-progress-fill" id="sb-pfill" style="width:0%"></div></div>
+      </div>
+    </div>
 
-  <?php foreach ($scales as $key => $scale): ?>
-  <div class="scale-section <?= $key === $initScale ? 'active' : '' ?>" id="section-<?= $key ?>">
-    <div class="instruction"><?= htmlspecialchars($scale['instruction']) ?></div>
+    <div class="sb-card">
+      <?php if ($initPatient):
+        require_once __DIR__ . '/patient_store.php';
+        $agev = ageFromBirth($birthDate ?? null);
+      ?>
+      <div class="sb-patient">
+        <b><?= htmlspecialchars($initPatient) ?></b>
+        <?php if (($gender ?? '') || $agev !== null): ?>
+          <span><?= htmlspecialchars($gender ?? '') ?><?= $agev !== null ? ' ' . $agev . '세' : '' ?></span>
+        <?php endif; ?>
+        <?php if ($battery && $batteryTotal > 1): ?>
+          <span>· 검사 <?= $batteryStep ?>/<?= $batteryTotal ?></span>
+        <?php endif; ?>
+        <span class="ok">✓ 동의</span>
+      </div>
+      <?php endif; ?>
+      <button type="button" class="cancel-btn" id="cancelBtn" onclick="openCancel()">
+        <?= $battery ? ($isLastStep ? '이 검사 취소하고 결과 보기 →' : '이 검사 취소하고 다음으로 →') : '검사 취소' ?>
+      </button>
+    </div>
+  </aside>
 
-    <?php
-    // 리커트 옵션 개수에 따른 색상 그라데이션 (연한 파랑 → 진한 네이비)
-    $optCount = count($scale['options']);
+  <!-- ===== 오른쪽: 문항 ===== -->
+  <div class="content">
+  <?php foreach ($scales as $key => $scale):
+    $layout   = $scale['layout'] ?? 'segment';
+    $opts     = $scale['options'];
+    $optCount = count($opts);
+    // 세그먼트 색상 그라데이션 (연한 파랑 → 진한 네이비) — 응답 강도 표현(불안 유발 X)
     if ($optCount >= 5) {
         $segColors = ['#E0F2FE','#BAE6FD','#3B82F6','#1D4ED8','#0F172A'];
         $segTextDark = [true,true,true,false,false];
-    } else {
-        $segColors = ['#DBEAFE','#60A5FA','#2563EB','#0F172A'];
+    } elseif ($optCount === 4) {
+        $segColors = ['#DBEAFE','#93C5FD','#3B82F6','#1D4ED8'];
         $segTextDark = [true,true,false,false];
+    } else {
+        $segColors = ['#DBEAFE','#60A5FA','#1D4ED8'];
+        $segTextDark = [true,false,false];
     }
+  ?>
+  <div class="scale-section <?= $key === $initScale ? 'active' : '' ?>" id="section-<?= $key ?>">
+    <div class="card">
+    <?php foreach ($scale['questions'] as $qi => $question):
+      $isFemaleOnly = in_array($qi, $scale['female_only_items'] ?? [], true);
     ?>
-
-    <!-- 진행 바 -->
-    <div class="progress-wrap">
-      <div class="progress-label">
-        <span id="ptxt-<?= $key ?>">1 / <?= count($scale['questions']) ?></span>
-        <span id="ppct-<?= $key ?>">0%</span>
-      </div>
-      <div class="progress-bar"><div class="progress-fill" id="pfill-<?= $key ?>" style="width:0%"></div></div>
-    </div>
-
-    <?php foreach ($scale['questions'] as $qi => $question): ?>
-    <div class="question-slide <?= $qi===0?'active':'' ?>" id="slide-<?= $key ?>-<?= $qi ?>">
+    <div class="question-slide <?= $qi===0?'active':'' ?>" id="slide-<?= $key ?>-<?= $qi ?>"
+         data-female="<?= $isFemaleOnly ? '1' : '0' ?>">
       <div class="q-card">
         <div class="q-number">문항 <?= $qi+1 ?> / <?= count($scale['questions']) ?></div>
         <div class="q-text"><?= htmlspecialchars($question) ?></div>
-        <div class="q-options">
-          <?php foreach ($scale['options'] as $oi => $optLabel):
-            $segBg   = $segColors[$oi] ?? '#3B82F6';
-            $segText = ($segTextDark[$oi] ?? false) ? '#0f172a' : '#fff';
-          ?>
-          <button type="button" class="q-option-btn"
-                  style="--seg-bg:<?= $segBg ?>;--seg-text:<?= $segText ?>;"
-                  data-scale="<?= $key ?>" data-qi="<?= $qi ?>" data-value="<?= $scale['option_values'][$oi] ?>"
-                  onclick="selectAnswer(this)">
-            <span class="seg-block"><span class="seg-check">✓</span></span>
-            <span class="seg-label"><?= htmlspecialchars($optLabel) ?></span>
-          </button>
-          <?php endforeach; ?>
-        </div>
+
+        <?php if ($layout === 'yesno'): ?>
+          <div class="q-yesno">
+            <?php foreach ($opts as $oi => $optLabel): ?>
+            <button type="button" class="ynbtn" data-scale="<?= $key ?>" data-qi="<?= $qi ?>" data-idx="<?= $oi ?>"
+                    onclick="selectAnswer(this)">
+              <span class="yn-ico"><?= $oi === 0 ? '⭕' : '❌' ?></span><span><?= htmlspecialchars($optLabel) ?></span>
+            </button>
+            <?php endforeach; ?>
+          </div>
+
+        <?php elseif ($layout === 'vertical'): ?>
+          <div class="q-vert">
+            <?php foreach ($opts as $oi => $optLabel): ?>
+            <button type="button" class="vbtn" data-scale="<?= $key ?>" data-qi="<?= $qi ?>" data-idx="<?= $oi ?>"
+                    onclick="selectAnswer(this)"><?= htmlspecialchars($optLabel) ?></button>
+            <?php endforeach; ?>
+          </div>
+
+        <?php else: /* segment */ ?>
+          <div class="q-options">
+            <?php foreach ($opts as $oi => $optLabel):
+              $segBg   = $segColors[$oi] ?? '#3B82F6';
+              $segText = ($segTextDark[$oi] ?? false) ? '#0f172a' : '#fff';
+            ?>
+            <button type="button" class="q-option-btn"
+                    style="--seg-bg:<?= $segBg ?>;--seg-text:<?= $segText ?>;"
+                    data-scale="<?= $key ?>" data-qi="<?= $qi ?>" data-idx="<?= $oi ?>"
+                    onclick="selectAnswer(this)">
+              <span class="seg-block"><span class="seg-check">✓</span></span>
+              <span class="seg-label"><?= htmlspecialchars($optLabel) ?></span>
+            </button>
+            <?php endforeach; ?>
+          </div>
+        <?php endif; ?>
       </div>
     </div>
     <?php endforeach; ?>
 
     <!-- 완료 -->
     <div class="complete-screen" id="complete-<?= $key ?>">
-      <?php if($key === 'PHQ-9'): ?>
-      <div id="phq9-warning" style="display:none;background:#fff3cd;border:2px solid #f0ad4e;border-radius:10px;padding:14px 16px;margin-bottom:14px;font-size:.875rem;color:#7d5a00;text-align:left;line-height:1.6;"></div>
-      <?php endif; ?>
+      <div class="flag-note" id="flag-<?= $key ?>"></div>
       <div class="complete-score" id="cscore-<?= $key ?>">—</div>
       <div class="complete-label" id="clabel-<?= $key ?>">—</div>
-      <!-- 저장 상태 -->
       <div id="save-status-<?= $key ?>" class="save-status-box"></div>
 
-      <!-- 메모 (저장 후에도 추가 가능) -->
       <div class="card" style="text-align:left;margin-bottom:10px;display:none;" id="memo-card-<?= $key ?>">
         <label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:6px;">메모</label>
         <textarea id="memo-<?= $key ?>" placeholder="임상 소견, 특이사항 등"></textarea>
         <button type="button" class="btn btn-secondary" style="margin-top:8px;width:100%;font-size:.85rem;"
                 onclick="saveWithMemo('<?= $key ?>')">메모 포함하여 다시 저장</button>
       </div>
-      <!-- 연속검사: 다음 검사로 -->
       <div id="battery-next-<?= $key ?>" style="margin-top:6px;"></div>
     </div>
 
@@ -365,6 +445,7 @@ body.font-lg .q-number{font-size:.9rem !important;}
     <div class="nav-btns" id="navbtns-<?= $key ?>">
       <button type="button" class="btn btn-secondary" id="btn-prev-<?= $key ?>" onclick="prevQ('<?= $key ?>')" disabled>← 이전</button>
       <button type="button" class="btn btn-primary"   id="btn-next-<?= $key ?>" onclick="nextQ('<?= $key ?>')" disabled>다음 →</button>
+    </div>
     </div>
   </div>
   <?php endforeach; ?>
@@ -377,9 +458,21 @@ body.font-lg .q-number{font-size:.9rem !important;}
     <input type="hidden" name="memo"         id="f_memo">
     <div id="f_answers"></div>
   </form>
+  </div>
+</div>
+
+<!-- 취소 확인 모달 -->
+<div class="modal-overlay" id="cancelModal" onclick="if(event.target===this)closeCancel()">
+  <div class="modal-box">
+    <h3 id="cancelTitle">검사를 취소할까요?</h3>
+    <p id="cancelMsg">현재 검사의 응답은 저장되지 않습니다.</p>
+    <div class="modal-btns">
+      <button type="button" class="btn btn-secondary" onclick="closeCancel()">계속 검사</button>
+      <button type="button" class="btn btn-primary" id="cancelConfirm">취소하고 진행</button>
+    </div>
+  </div>
 </div>
 <?php endif; ?>
-</div>
 
 <script>
 const BATTERY     = <?= $battery ? 'true' : 'false' ?>;
@@ -388,245 +481,278 @@ const NEXT_URL    = <?= json_encode($nextUrl) ?>;
 const QUEUE       = <?= json_encode($queue) ?>;
 const QPOS        = <?= $qpos ?>;
 const NEXT_SCALE  = QUEUE[QPOS + 1] || '';
+const IS_MALE     = <?= $isMale ? 'true' : 'false' ?>;
 const PT = {
   birth:   <?= json_encode($birthDate) ?>,
   gender:  <?= json_encode($gender) ?>,
   phone:   <?= json_encode($phone) ?>,
   battery: <?= json_encode($batteryId) ?>
 };
-const state = {};
-<?php foreach ($scales as $key => $scale): ?>
-state['<?= $key ?>'] = {
-  current:0, total:<?= count($scale['questions']) ?>,
-  answers:{},
-  scoring:<?= json_encode($scale['scoring']) ?>,
-  reverseItems:<?= json_encode($scale['reverse_items'] ?? []) ?>,
-  maxOptionVal:<?= max($scale['option_values']) ?>,
-  advancing:false, completed:false, savedId:null
+const COLOR = {
+  green:{solid:'#27ae60',text:'#1b7a43'}, yellow:{solid:'#e0a800',text:'#8a6100'},
+  orange:{solid:'#e67e22',text:'#9a4a12'}, black:{solid:'#4b5563',text:'var(--severe)'},
+  red:{solid:'#4b5563',text:'var(--severe)'}, darkred:{solid:'#4b5563',text:'var(--severe)'}
 };
+
+const SCALEMETA = {};
+const state = {};
+<?php foreach ($scales as $key => $scale):
+  // 남성 환자면 여성전용 문항 제외한 표시 순서
+  $order = [];
+  foreach ($scale['questions'] as $qi => $q) {
+      if ($isMale && in_array($qi, $scale['female_only_items'] ?? [], true)) continue;
+      $order[] = $qi;
+  }
+?>
+SCALEMETA['<?= $key ?>'] = {
+  name: '<?= $key ?>',
+  full: <?= json_encode($scale['full_name'] ?? '') ?>,
+  period: <?= json_encode($scale['period'] ?? '') ?>,
+  instruction: <?= json_encode($scale['instruction'] ?? '') ?>,
+  layout: <?= json_encode($scale['layout'] ?? 'segment') ?>,
+  qCount: <?= count($scale['questions']) ?>,
+  order: <?= json_encode($order) ?>,
+  femaleOnly: <?= json_encode(array_values($scale['female_only_items'] ?? [])) ?>,
+  optionValues: <?= json_encode($scale['option_values'] ?? array_map('intval', array_keys($scale['options']))) ?>,
+  itemScores: <?= json_encode($scale['item_scores'] ?? null) ?>,
+  reverseItems: <?= json_encode($scale['reverse_items'] ?? []) ?>,
+  scoring: <?= json_encode($scale['scoring']) ?>,
+  flag: <?= json_encode(isset($scale['flag_item']) ? ['item'=>$scale['flag_item'],'warn'=>$scale['flag_warn'] ?? 999,'urgent'=>$scale['flag_urgent'] ?? 999,'text'=>$scale['flag_text'] ?? ''] : null) ?>,
+  phq9: <?= $key === 'PHQ-9' ? 'true' : 'false' ?>
+};
+state['<?= $key ?>'] = { pos:0, answers:{}, advancing:false, completed:false, savedId:null };
 <?php endforeach; ?>
 
-// 시계
-function tick(){
-  const n=new Date(),p=v=>String(v).padStart(2,'0');
-  const s=`${n.getFullYear()}.${p(n.getMonth()+1)}.${p(n.getDate())} ${p(n.getHours())}:${p(n.getMinutes())}`;
-  const e=document.getElementById('dt_bar'); if(e) e.textContent=s;
-}
-tick(); setInterval(tick,1000);
-
+// 시계 (사이드바 환자정보엔 표시 안 함; 유지 목적)
 function toggleTheme(){
-  const html = document.documentElement;
-  const btn  = document.getElementById('themeToggle');
+  const html = document.documentElement, btn = document.getElementById('themeToggle');
   const dark = html.getAttribute('data-theme') === 'dark';
-  if (dark) { html.removeAttribute('data-theme'); if(btn) btn.textContent = '🌙'; }
-  else      { html.setAttribute('data-theme', 'dark'); if(btn) btn.textContent = '☀️'; }
-  try { localStorage.setItem('theme', dark ? 'light' : 'dark'); } catch(e) {}
+  if (dark) { html.removeAttribute('data-theme'); if(btn) btn.textContent='🌙'; }
+  else { html.setAttribute('data-theme','dark'); if(btn) btn.textContent='☀️'; }
+  try { localStorage.setItem('theme', dark?'light':'dark'); } catch(e){}
 }
-if (document.getElementById('themeToggle') && document.documentElement.getAttribute('data-theme') === 'dark') {
-  document.getElementById('themeToggle').textContent = '☀️';
-}
+if (document.getElementById('themeToggle') && document.documentElement.getAttribute('data-theme')==='dark')
+  document.getElementById('themeToggle').textContent='☀️';
+
+let activeScale = '<?= $initScale ?>';
 
 function switchScale(key){
+  activeScale = key;
   document.querySelectorAll('.scale-section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.scale-tab').forEach(t=>t.classList.remove('active'));
-  document.getElementById('section-'+key).classList.add('active');
-  document.querySelectorAll('.scale-tab').forEach(t=>{if(t.querySelector('input').value===key)t.classList.add('active');});
-  state[key].current=0; state[key].answers={}; state[key].completed=false; state[key].advancing=false;
+  const sec = document.getElementById('section-'+key);
+  if (sec) sec.classList.add('active');
+  document.querySelectorAll('.scale-tab').forEach(t=>{ if(t.querySelector('input') && t.querySelector('input').value===key) t.classList.add('active'); });
+  // 사이드바 갱신
+  const m = SCALEMETA[key];
+  document.getElementById('sb-name').textContent = m.name;
+  document.getElementById('sb-full').textContent = m.full;
+  document.getElementById('sb-period').textContent = m.period || '—';
+  document.getElementById('sb-guide').textContent = m.instruction || '—';
+  // 상태 초기화
+  const s = state[key];
+  s.pos=0; s.answers={}; s.completed=false; s.advancing=false;
   showSlide(key,0); updateProg(key);
 }
 
-function showSlide(key,idx){
-  const s=state[key];
+function currentQi(key){ return SCALEMETA[key].order[state[key].pos]; }
+
+function showSlide(key,pos){
+  const m = SCALEMETA[key], s = state[key];
+  s.pos = pos;
   document.querySelectorAll(`#section-${key} .question-slide`).forEach(e=>e.classList.remove('active'));
   document.getElementById(`complete-${key}`).classList.remove('active');
   document.getElementById(`navbtns-${key}`).style.display='flex';
-  const slide=document.getElementById(`slide-${key}-${idx}`);
-  if(slide){
+  const qi = m.order[pos];
+  const slide = document.getElementById(`slide-${key}-${qi}`);
+  if (slide){
     slide.classList.add('active');
-    if(s.answers[idx]!==undefined){
-      slide.querySelectorAll('.q-option-btn').forEach(b=>{
-        b.classList.toggle('selected',parseInt(b.dataset.value)===s.answers[idx]);
-      });
+    if (s.answers[qi]!==undefined){
+      slide.querySelectorAll('[data-idx]').forEach(b=>b.classList.toggle('selected', parseInt(b.dataset.idx)===s.answers[qi]));
     }
   }
-  const pv=document.getElementById(`btn-prev-${key}`);
-  const nv=document.getElementById(`btn-next-${key}`);
-  pv.disabled=idx===0;
-  nv.disabled=s.answers[idx]===undefined;
-  nv.textContent=idx===s.total-1?'완료 →':'다음 →';
+  const pv=document.getElementById(`btn-prev-${key}`), nv=document.getElementById(`btn-next-${key}`);
+  pv.disabled = pos===0;
+  nv.disabled = s.answers[qi]===undefined;
+  nv.textContent = pos===m.order.length-1 ? '완료 →' : '다음 →';
+  updateProg(key);
 }
 
 function selectAnswer(btn){
-  const key=btn.dataset.scale, qi=parseInt(btn.dataset.qi), val=parseInt(btn.dataset.value);
+  const key=btn.dataset.scale, qi=parseInt(btn.dataset.qi), idx=parseInt(btn.dataset.idx);
   const s=state[key];
-  if (s.advancing) return; // 연타/이중 클릭으로 인한 중복 진행·중복 저장 방지
+  if (s.advancing) return;
   s.advancing = true;
-  document.querySelectorAll(`#slide-${key}-${qi} .q-option-btn`).forEach(b=>b.classList.remove('selected'));
+  document.querySelectorAll(`#slide-${key}-${qi} [data-idx]`).forEach(b=>b.classList.remove('selected'));
   btn.classList.add('selected');
-  s.answers[qi]=val;
+  s.answers[qi]=idx;
   document.getElementById(`btn-next-${key}`).disabled=false;
   updateProg(key);
-  setTimeout(()=>{ s.advancing = false; nextQ(key); },280);
+  setTimeout(()=>{ s.advancing=false; nextQ(key); },260);
 }
 
-function prevQ(key){const s=state[key];if(s.current>0){s.current--;showSlide(key,s.current);updateProg(key);}}
+function prevQ(key){ const s=state[key]; if(s.pos>0) showSlide(key,s.pos-1); }
 function nextQ(key){
-  const s=state[key];
-  if(s.answers[s.current]===undefined)return;
-  if(s.current<s.total-1){s.current++;showSlide(key,s.current);updateProg(key);}
+  const m=SCALEMETA[key], s=state[key];
+  if (s.answers[m.order[s.pos]]===undefined) return;
+  if (s.pos < m.order.length-1) showSlide(key,s.pos+1);
   else showComplete(key);
 }
 function updateProg(key){
-  const s=state[key], answered=Object.keys(s.answers).length;
-  const pct=Math.round(answered/s.total*100);
-  document.getElementById(`pfill-${key}`).style.width=pct+'%';
-  document.getElementById(`ptxt-${key}`).textContent=`${s.current+1} / ${s.total}`;
-  document.getElementById(`ppct-${key}`).textContent=pct+'%';
+  const m=SCALEMETA[key], s=state[key];
+  const answered=Object.keys(s.answers).length, tot=m.order.length;
+  const pct=Math.round(answered/tot*100);
+  document.getElementById('sb-pfill').style.width=pct+'%';
+  document.getElementById('sb-ptxt').textContent=`${s.pos+1} / ${tot}`;
+  document.getElementById('sb-ppct').textContent=pct+'%';
 }
+
+// 점수 계산 (PHP calculateScore 와 동일 규칙)
+function scoreItem(m, qi, idx){
+  if (m.itemScores && m.itemScores[qi]) return (m.itemScores[qi][idx] ?? 0);
+  const val = m.optionValues[idx] !== undefined ? m.optionValues[idx] : idx;
+  if (m.reverseItems && m.reverseItems.includes(qi)){
+    const mx = Math.max.apply(null, m.optionValues);
+    return mx - val;
+  }
+  return val;
+}
+
+function buildFullAnswers(key){
+  // 전체 문항 길이의 배열(선택 인덱스). 남성 여성전용 문항은 0.
+  const m=SCALEMETA[key], s=state[key];
+  const a=[];
+  for(let qi=0; qi<m.qCount; qi++){
+    if (s.answers[qi]!==undefined) a.push(s.answers[qi]);
+    else a.push(0); // 미표시(여성전용) 또는 미응답 → 0 인덱스
+  }
+  return a;
+}
+
 function showComplete(key){
-  const s=state[key];
-  if (s.completed) return; // 중복 호출로 인한 중복 자동저장 방지
+  const m=SCALEMETA[key], s=state[key];
+  if (s.completed) return;
   s.completed = true;
   let total=0;
-  for(let i=0;i<s.total;i++){
-    let v = s.answers[i]||0;
-    if(s.reverseItems && s.reverseItems.includes(i)){
-      v = s.maxOptionVal - v;
-    }
-    total += v;
+  for (const qi of m.order){
+    const idx = s.answers[qi]; if (idx===undefined) continue;
+    total += scoreItem(m, qi, idx);
   }
-  let label='';
-  for(const r of s.scoring){if(total>=r.min&&total<=r.max){label=r.label;break;}}
-  if (typeof tossCountUp === 'function') tossCountUp(document.getElementById(`cscore-${key}`), total, {suffix:'점'});
-  else document.getElementById(`cscore-${key}`).textContent=total+'점';
-  document.getElementById(`clabel-${key}`).textContent = BATTERY ? '검사가 완료되었습니다' : label;
+  let label='', color='green';
+  for(const r of m.scoring){ if(total>=r.min&&total<=r.max){ label=r.label; color=r.color; break; } }
+  const c = COLOR[color] || {solid:'#3b82f6',text:'#3b82f6'};
+
+  const scoreEl=document.getElementById(`cscore-${key}`), labelEl=document.getElementById(`clabel-${key}`);
+  if (typeof tossCountUp === 'function') tossCountUp(scoreEl, total, {suffix:'점'});
+  else scoreEl.textContent = total+'점';
+  labelEl.textContent = BATTERY ? '검사가 완료되었습니다' : label;
+  // 색상: 연속검사(환자 직접 응답) 시엔 중립(파랑), 단독검사 시 밴드색(중한 결과는 검정)
+  scoreEl.style.color = BATTERY ? 'var(--primary)' : c.text;
+  labelEl.style.color = BATTERY ? 'var(--primary)' : c.text;
+
+  // 안전 플래그 (BDI-9 등) + PHQ-9 9번 문항 — 연속검사 중엔 환자에게 표시하지 않음
+  const flagEl=document.getElementById(`flag-${key}`);
+  flagEl.style.display='none';
+  if (!BATTERY){
+    let fl=null;
+    if (m.flag){
+      const fidx = s.answers[m.flag.item];
+      if (fidx!==undefined){
+        if (fidx>=m.flag.urgent) fl={level:'urgent', text:`${m.flag.text}에서 높은 응답(${fidx}점) — 즉각적인 안전 평가가 필요합니다.`};
+        else if (fidx>=m.flag.warn) fl={level:'warn', text:`${m.flag.text}에 응답이 있었습니다(${fidx}점) — 추가적인 임상 판단이 필요합니다.`};
+      }
+    }
+    if (m.phq9){
+      const q9 = s.answers[8] || 0;
+      if (q9>=2) fl={level:'urgent', text:`9번 문항(자해·자살 사고)에서 높은 점수(${q9}점)가 나왔습니다. 즉각적인 임상적 평가와 안전 확인이 필요합니다.`};
+      else if (q9>=1) fl={level:'warn', text:`9번 문항(자해·자살 사고)에 응답이 있었습니다(${q9}점). 추가적인 임상적 판단이 필요합니다.`};
+    }
+    if (fl){
+      flagEl.style.display='block';
+      flagEl.className = 'flag-note '+fl.level;
+      flagEl.innerHTML = (fl.level==='urgent'?'⚠️ <strong>즉각적 주의 필요</strong><br>':'⚠️ <strong>주의</strong><br>') + fl.text;
+    }
+  }
+
   document.querySelectorAll(`#section-${key} .question-slide`).forEach(e=>e.classList.remove('active'));
   document.getElementById(`navbtns-${key}`).style.display='none';
   document.getElementById(`complete-${key}`).classList.add('active');
-
-  // PHQ-9 9번 문항(자해/자살 사고) 주의 알림
-  if(!BATTERY && key === 'PHQ-9') {
-    const q9score = s.answers[8] || 0;
-    const warningEl = document.getElementById('phq9-warning');
-    if(q9score >= 1) {
-      warningEl.style.display = 'block';
-      warningEl.innerHTML = q9score >= 2
-        ? '⚠️ <strong>즉각적 주의 필요</strong>: 9번 문항(자해·자살 사고)에서 높은 점수('+q9score+'점)가 나왔습니다. 즉각적인 임상적 평가와 안전 확인이 필요합니다.'
-        : '⚠️ <strong>주의</strong>: 9번 문항(자해·자살 사고)에 응답이 있었습니다('+q9score+'점). 추가적인 임상적 판단이 필요합니다.';
-    } else {
-      warningEl.style.display = 'none';
-    }
-  }
-
-  // 자동 저장 (1초 후)
-  setTimeout(() => autoSave(key), 1000);
+  setTimeout(()=>autoSave(key), 900);
 }
-// AJAX 저장 공통 함수
-async function doSave(key, memo) {
-  const patient = document.getElementById('f_patient').value.trim();
-  if (!patient) { window.location = 'consent.php?step=1'; return; }
 
-  const s = state[key];
-  const answers = [];
-  for (let i = 0; i < s.total; i++) answers.push(s.answers[i] !== undefined ? s.answers[i] : 0);
-
-  const statusEl = document.getElementById(`save-status-${key}`);
-  statusEl.innerHTML = '<span style="color:var(--muted)">💾 저장 중...</span>';
-
-  // CSRF 토큰 가져오기
-  const csrfEl = document.querySelector('input[name="csrf_token"]');
-  const csrf = csrfEl ? csrfEl.value : '';
-
-  try {
-    const res = await fetch('save_assessment.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json; charset=utf-8' },
-      body: JSON.stringify(Object.assign({
-        csrf_token:     csrf,
-        patient_name:   patient,
-        scale_type:     key,
-        answers:        answers,
-        memo:           memo || '',
-        assessment_id:  s.savedId || null,
-      }, BATTERY ? { birth_date: PT.birth, gender: PT.gender, phone: PT.phone, battery_id: PT.battery } : {}))
+// ===== 저장 (기존과 동일) =====
+async function doSave(key, memo){
+  const patient=document.getElementById('f_patient').value.trim();
+  if(!patient){ window.location='consent.php?step=1'; return; }
+  const answers = buildFullAnswers(key);
+  const statusEl=document.getElementById(`save-status-${key}`);
+  statusEl.innerHTML='<span style="color:var(--muted)">💾 저장 중...</span>';
+  const csrfEl=document.querySelector('input[name="csrf_token"]');
+  const csrf=csrfEl?csrfEl.value:'';
+  try{
+    const res=await fetch('save_assessment.php',{
+      method:'POST', headers:{'Content-Type':'application/json; charset=utf-8'},
+      body:JSON.stringify(Object.assign({csrf_token:csrf, patient_name:patient, scale_type:key, answers:answers, memo:memo||'', assessment_id:state[key].savedId||null}, BATTERY?{birth_date:PT.birth,gender:PT.gender,phone:PT.phone,battery_id:PT.battery}:{}))
     });
-
-    const text = await res.text();
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch(parseErr) {
-      statusEl.innerHTML = `<span style="color:#c0392b;">❌ 서버 응답 오류</span>
-        <button onclick="autoSave('${key}')" style="margin-left:8px;font-size:.82rem;border:none;background:none;color:var(--primary);cursor:pointer;font-weight:700;">다시 시도</button>`;
-      console.error('Response:', text);
-      return;
+    const text=await res.text(); let data;
+    try{ data=JSON.parse(text); }catch(e){
+      statusEl.innerHTML=`<span style="color:var(--severe);font-weight:700;">❌ 서버 응답 오류</span> <button onclick="autoSave('${key}')" style="border:none;background:none;color:var(--primary);cursor:pointer;font-weight:700;">다시 시도</button>`;
+      console.error('Response:',text); return;
     }
-
-    if (data.success) {
-      statusEl.innerHTML = `<span style="color:#27ae60;font-weight:700;">✅ 저장 완료</span>`;
-      if (data.id) s.savedId = data.id;
-      if (BATTERY) {
-        const nx = document.getElementById(`battery-next-${key}`);
-        if (nx) nx.innerHTML = `<a href="${NEXT_URL}" class="btn btn-primary" style="display:block;text-align:center;text-decoration:none;padding:14px;">${BATTERY_LAST ? '검사 마치고 결과 보기 →' : ('다음 검사 진행 (' + NEXT_SCALE + ') →')}</a>`;
+    if(data.success){
+      statusEl.innerHTML='<span style="color:#27ae60;font-weight:700;">✅ 저장 완료</span>';
+      if(data.id) state[key].savedId=data.id;
+      if(BATTERY){
+        const nx=document.getElementById(`battery-next-${key}`);
+        if(nx) nx.innerHTML=`<a href="${NEXT_URL}" class="btn btn-primary" style="display:block;text-align:center;text-decoration:none;padding:14px;">${BATTERY_LAST?'검사 마치고 결과 보기 →':('다음 검사 진행 ('+NEXT_SCALE+') →')}</a>`;
       } else {
-        const memoCard = document.getElementById(`memo-card-${key}`);
-        if (memoCard) memoCard.style.display = 'block';
+        const mc=document.getElementById(`memo-card-${key}`); if(mc) mc.style.display='block';
       }
     } else {
-      statusEl.innerHTML = `<span style="color:#c0392b;">❌ 저장 실패: ${data.message}</span>
-        <button onclick="autoSave('${key}')" style="margin-left:8px;font-size:.82rem;border:none;background:none;color:var(--primary);cursor:pointer;font-weight:700;">다시 시도</button>`;
+      statusEl.innerHTML=`<span style="color:var(--severe);font-weight:700;">❌ 저장 실패: ${data.message}</span> <button onclick="autoSave('${key}')" style="border:none;background:none;color:var(--primary);cursor:pointer;font-weight:700;">다시 시도</button>`;
     }
-  } catch(e) {
-    statusEl.innerHTML = `<span style="color:#c0392b;">❌ 네트워크 오류 — 와이파이 연결을 확인해주세요</span>
-      <button onclick="autoSave('${key}')" style="margin-left:8px;font-size:.82rem;border:none;background:none;color:var(--primary);cursor:pointer;font-weight:700;">다시 시도</button>`;
+  }catch(e){
+    statusEl.innerHTML=`<span style="color:var(--severe);font-weight:700;">❌ 네트워크 오류 — 연결을 확인해주세요</span> <button onclick="autoSave('${key}')" style="border:none;background:none;color:var(--primary);cursor:pointer;font-weight:700;">다시 시도</button>`;
     console.error(e);
   }
 }
+function autoSave(key){ doSave(key,''); }
+function saveWithMemo(key){ doSave(key, document.getElementById(`memo-${key}`).value); }
 
-// 자동 저장 (메모 없이)
-function autoSave(key) {
-  doSave(key, '');
+// ===== 검사 취소/건너뛰기 =====
+function openCancel(){
+  const modal=document.getElementById('cancelModal');
+  const title=document.getElementById('cancelTitle'), msg=document.getElementById('cancelMsg'), btn=document.getElementById('cancelConfirm');
+  if(BATTERY){
+    title.textContent = BATTERY_LAST ? '이 검사를 취소할까요?' : '이 검사를 건너뛸까요?';
+    msg.textContent = BATTERY_LAST ? '현재 검사는 저장되지 않고 결과 화면으로 이동합니다.' : ('현재 검사는 저장되지 않고 다음 검사'+(NEXT_SCALE?(' ('+NEXT_SCALE+')'):'')+'로 넘어갑니다.');
+    btn.textContent = BATTERY_LAST ? '취소하고 결과 보기' : '건너뛰고 다음으로';
+    btn.onclick = ()=>{ window.location = NEXT_URL; };
+  } else {
+    title.textContent = '검사를 취소할까요?';
+    msg.textContent = '현재 검사의 응답은 저장되지 않습니다.';
+    btn.textContent = '취소하고 나가기';
+    btn.onclick = ()=>{ window.location = 'consent.php'; };
+  }
+  modal.classList.add('open');
 }
-
-// 메모 포함 재저장
-function saveWithMemo(key) {
-  const memo = document.getElementById(`memo-${key}`).value;
-  doSave(key, memo);
-}
-
-// 하위 호환용
-function submitResult(key){ autoSave(key); }
+function closeCancel(){ document.getElementById('cancelModal').classList.remove('open'); }
 
 // 초기 척도
 switchScale('<?= $initScale ?>');
 </script>
-<!-- 새 검사 버튼 (연속검사 중에는 숨김) -->
-<?php if (!$battery): ?>
-<a href="consent.php?step=1" class="float-btn" style="bottom:76px;" title="새 검사 입력">✏️</a>
-<?php endif; ?>
 
-<!-- 돋보기 버튼 -->
+<?php if (!$success && !$error): ?>
 <div class="zoom-tooltip" id="zoomTooltip">글자 크게/작게</div>
 <button class="zoom-btn" id="zoomBtn" onclick="toggleZoom()" title="글자 크기 조절">🔍</button>
-
 <script>
-function toggleZoom() {
-  const body = document.body;
-  const btn  = document.getElementById('zoomBtn');
-  const tip  = document.getElementById('zoomTooltip');
-  if (body.classList.contains('font-lg')) {
-    body.classList.remove('font-lg');
-    btn.textContent = '🔍';
-    tip.textContent = '글자 크게';
-  } else {
-    body.classList.add('font-lg');
-    btn.textContent = '🔎';
-    tip.textContent = '글자 작게';
-  }
-  // 툴팁 잠깐 표시
-  tip.style.display = 'block';
-  setTimeout(() => tip.style.display = 'none', 1500);
+function toggleZoom(){
+  const body=document.body, btn=document.getElementById('zoomBtn'), tip=document.getElementById('zoomTooltip');
+  if(body.classList.contains('font-lg')){ body.classList.remove('font-lg'); btn.textContent='🔍'; tip.textContent='글자 크게'; }
+  else{ body.classList.add('font-lg'); btn.textContent='🔎'; tip.textContent='글자 작게'; }
+  tip.style.display='block'; setTimeout(()=>tip.style.display='none',1500);
 }
 </script>
+<?php endif; ?>
 </body>
 </html>

@@ -14,6 +14,8 @@ $meta = getPsqiMeta();
 $csrf = getCsrfToken();
 $initPatient = $consentData['patient_name'] ?? '';
 $freqOptions = $meta['freq_options'];
+$totalItems  = count($meta['items']);        // 채점 18문항 + 참고(문항10 등) 포함 전체 슬라이드 수
+$scoredCount = $meta['scored_count'] ?? 18;
 
 // 연속검사(방문) 모드
 $battery      = (($_GET['from'] ?? '') === 'battery');
@@ -39,6 +41,60 @@ $isLastStep   = ($batteryStep >= $batteryTotal);
   --bg:#f0f4f8;--card:#fff;--primary:#3b6cb7;--primary-dark:#2d549a;
   --text:#1a2236;--muted:#6b7a99;--border:#dce3ef;
   --radius:12px;--shadow:0 4px 24px rgba(59,108,183,.10);
+  --severe:#4b5563;  /* 중한 결과: 붉은색 대신 검정 계열 */
+}
+/* 응답 기간 배너 */
+.period-banner{display:flex;align-items:center;gap:10px;justify-content:center;background:#eef2fb;border:1.5px solid var(--primary);border-radius:12px;padding:10px 16px;margin-bottom:12px;}
+.period-banner-label{font-size:.74rem;font-weight:700;color:var(--muted);letter-spacing:.03em;}
+.period-banner-value{font-size:1.15rem;font-weight:800;color:var(--primary);}
+/* Q10 선택형(세로) 버튼 */
+.q-choice{display:flex;flex-direction:column;gap:8px;}
+.choice-btn{width:100%;padding:14px 16px;border:2px solid var(--border);border-radius:10px;background:#fff;cursor:pointer;font-size:.95rem;font-weight:600;color:var(--text);transition:all .15s;text-align:left;font-family:inherit;line-height:1.5;}
+.choice-btn:hover{border-color:var(--primary);background:#f0f4ff;}
+.choice-btn.selected{border-color:var(--primary);background:var(--primary);color:#fff;}
+/* 주관식(자유 입력) */
+.free-text{width:100%;min-height:90px;padding:12px 14px;border:2px solid var(--border);border-radius:10px;font-size:.95rem;font-family:inherit;color:var(--text);background:#fff;resize:vertical;outline:none;}
+.free-text:focus{border-color:var(--primary);}
+.inline-other{margin-top:14px;text-align:left;background:#fff;border:1.5px dashed var(--primary);border-radius:10px;padding:12px 14px;}
+.inline-other label{display:block;font-size:.82rem;font-weight:700;color:var(--primary);margin-bottom:8px;}
+.optional-hint{font-size:.78rem;color:var(--muted);margin-top:10px;}
+.cancel-btn{width:100%;margin-top:10px;padding:12px;border-radius:10px;border:1.5px solid var(--border);background:var(--bg);color:var(--muted);font-family:inherit;font-size:.88rem;font-weight:700;cursor:pointer;transition:all .2s;}
+.cancel-btn:hover{border-color:var(--severe);color:var(--severe);}
+/* 취소 확인 모달 */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center;padding:20px;}
+.modal-overlay.open{display:flex;}
+.modal-box{background:#fff;border-radius:16px;max-width:380px;width:100%;padding:24px;box-shadow:0 12px 48px rgba(0,0,0,.3);text-align:center;}
+.modal-box h3{font-size:1.1rem;font-weight:800;margin-bottom:10px;}
+.modal-box p{font-size:.9rem;color:var(--muted);line-height:1.6;margin-bottom:20px;}
+.modal-btns{display:flex;gap:10px;}
+.modal-btns .btn{flex:1;}
+/* ===== 2단 레이아웃(사이드바 + 문항) — 모든 척도 공통 ===== */
+.layout{flex:1;display:flex;gap:18px;max-width:1080px;width:100%;margin:0 auto;padding:16px;align-items:flex-start;}
+.sidebar{width:300px;flex-shrink:0;position:sticky;top:72px;display:flex;flex-direction:column;gap:12px;}
+.content{flex:1;min-width:0;display:flex;flex-direction:column;}
+.sb-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;}
+.sb-scale-name{font-size:1.5rem;font-weight:800;color:var(--primary);line-height:1.2;}
+.sb-scale-full{font-size:.78rem;color:var(--muted);margin-top:6px;line-height:1.5;}
+.sb-period-box{margin-top:14px;background:#eef2fb;border:1.5px solid var(--primary);border-radius:12px;padding:12px 14px;text-align:center;}
+.sb-period-label{font-size:.72rem;color:var(--muted);font-weight:700;letter-spacing:.03em;}
+.sb-period-value{font-size:1.15rem;font-weight:800;color:var(--primary);margin-top:2px;}
+.sb-guide-title{font-size:.74rem;font-weight:800;color:var(--muted);margin:16px 0 6px;letter-spacing:.03em;}
+.sb-guide{background:#f8fafd;border-left:4px solid var(--primary);border-radius:0 8px 8px 0;padding:11px 13px;font-size:.86rem;color:var(--text);line-height:1.65;}
+.sb-progress{margin-top:14px;}
+.sb-progress-label{display:flex;justify-content:space-between;font-size:.76rem;color:var(--muted);margin-bottom:6px;font-weight:600;}
+.sb-progress-bar{height:8px;background:var(--border);border-radius:99px;overflow:hidden;}
+.sb-progress-fill{height:100%;background:var(--primary);border-radius:99px;transition:width .3s;}
+.sb-patient{font-size:.82rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;margin-bottom:10px;}
+.sb-patient b{color:var(--text);}
+.sb-patient .ok{color:#16a34a;font-weight:700;}
+.cancel-btn{width:100%;margin-top:0;padding:11px;border-radius:10px;border:1.5px solid var(--border);background:#f8fafd;color:var(--muted);font-family:inherit;font-size:.86rem;font-weight:700;cursor:pointer;transition:all .2s;}
+.cancel-btn:hover{border-color:var(--severe);color:var(--severe);}
+body.font-lg .sb-guide{font-size:1rem !important;}
+body.font-lg .sb-period-value{font-size:1.3rem !important;}
+@media(max-width:860px){
+  .layout{flex-direction:column;gap:12px;padding:12px;}
+  .sidebar{width:100%;position:static;top:auto;}
+  .sb-scale-name{font-size:1.3rem;}
 }
 html,body{height:100%;font-family:'Apple SD Gothic Neo','Noto Sans KR',sans-serif;color:var(--text);}
 body{background:var(--bg);display:flex;flex-direction:column;min-height:100vh;}
@@ -77,11 +133,16 @@ body{background:var(--bg);display:flex;flex-direction:column;min-height:100vh;}
 .q-number{font-size:.75rem;font-weight:700;color:var(--primary);margin-bottom:10px;letter-spacing:.05em;}
 .q-text{font-size:1.05rem;font-weight:600;line-height:1.65;color:var(--text);margin-bottom:20px;}
 
-/* 리커트 버튼 */
-.q-options{display:flex;flex-direction:column;gap:8px;}
-.q-option-btn{width:100%;padding:13px 16px;border:2px solid var(--border);border-radius:9px;background:#fff;cursor:pointer;font-size:.95rem;font-weight:500;color:var(--text);transition:all .15s;text-align:left;font-family:inherit;}
-.q-option-btn:hover{border-color:var(--primary);color:var(--primary);background:#f0f4ff;}
-.q-option-btn.selected{border-color:var(--primary);background:var(--primary);color:#fff;}
+/* 리커트 세그먼트 바 (색상) — 다른 척도와 동일 */
+.q-options{display:flex;gap:6px;}
+.q-option-btn{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:0;border:none;background:none;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;}
+.seg-block{width:100%;min-height:72px;border-radius:16px;background:var(--seg-bg);display:flex;align-items:center;justify-content:center;transition:transform .15s ease,box-shadow .2s ease;}
+.seg-check{color:var(--seg-text);font-size:1.5rem;font-weight:800;opacity:0;transform:scale(.5);transition:all .2s ease;}
+.q-option-btn:hover .seg-block{transform:translateY(-2px);}
+.q-option-btn.selected .seg-block{box-shadow:0 0 0 3px var(--card),0 0 0 5px var(--seg-bg),0 6px 16px rgba(0,0,0,.2);transform:scale(1.04);}
+.q-option-btn.selected .seg-check{opacity:1;transform:scale(1);}
+.seg-label{font-size:.86rem;font-weight:600;color:var(--muted);text-align:center;line-height:1.3;}
+.q-option-btn.selected .seg-label{color:var(--text);font-weight:800;}
 
 /* 시간 입력 */
 .time-input{font-size:2rem;font-weight:700;padding:14px 18px;border:2px solid var(--border);border-radius:12px;font-family:inherit;color:var(--text);background:#fff;text-align:center;width:100%;max-width:220px;outline:none;}
@@ -126,7 +187,7 @@ body{background:var(--bg);display:flex;flex-direction:column;min-height:100vh;}
 .complete-label{font-size:1.1rem;font-weight:700;margin-bottom:8px;}
 .cutoff-note{display:inline-block;font-size:.85rem;font-weight:700;padding:6px 14px;border-radius:20px;margin-bottom:16px;}
 .cutoff-good{background:#eafaf1;color:#1e8449;border:1px solid #a9dfbf;}
-.cutoff-poor{background:#fdedec;color:#c0392b;border:1px solid #f1948a;}
+.cutoff-poor{background:#ececec;color:var(--severe);border:1px solid #4b5563;}
 
 /* 구성요소 막대 */
 .comp-list{text-align:left;margin:6px 0 4px;}
@@ -158,15 +219,21 @@ textarea:focus{border-color:var(--primary);}
 
 /* 유니버설 디자인: 글자 크게 모드 대응 */
 body.font-lg .q-text{font-size:1.3rem !important;}
-body.font-lg .q-option-btn{font-size:1.1rem !important;padding:16px 18px !important;}
+body.font-lg .seg-label{font-size:1.05rem !important;font-weight:700 !important;}
+body.font-lg .seg-block{min-height:84px !important;}
+body.font-lg .choice-btn{font-size:1.1rem !important;padding:16px 18px !important;}
 body.font-lg .instruction{font-size:1rem !important;}
 body.font-lg .num-preset{font-size:1.15rem !important;}
 body.font-lg .comp-name{font-size:.95rem !important;width:130px !important;}
 
 @media(min-width:768px){
   .main{padding:20px 24px;}
-  .q-options{flex-direction:row;flex-wrap:wrap;}
-  .q-option-btn{flex:1;min-width:calc(50% - 4px);text-align:center;}
+  .seg-block{min-height:88px;}
+}
+@media(max-width:380px){
+  .q-options{gap:4px;}
+  .seg-block{min-height:60px;border-radius:12px;}
+  .seg-label{font-size:.74rem;}
 }
 </style>
   <?php include __DIR__ . '/pwa_head.php'; ?>
@@ -186,53 +253,64 @@ body.font-lg .comp-name{font-size:.95rem !important;width:130px !important;}
   </nav>
 </header>
 
-<div class="main">
-
-<?php if ($initPatient): ?>
-<div class="info-bar">
-  <div>
-    <div class="info-patient">👤 <?= htmlspecialchars($initPatient) ?></div>
-    <div class="info-meta">
-      <?php if ($consentData['gender'] ?? ''): ?><span><?= htmlspecialchars($consentData['gender']) ?></span><?php endif; ?>
-      <?php if ($consentData['age'] ?? ''): ?><span><?= htmlspecialchars($consentData['age']) ?>세</span><?php endif; ?>
-      <?php if ($battery && $batteryTotal > 1): ?>
-        <span style="color:var(--primary);font-weight:700;">검사 <?= $batteryStep ?> / <?= $batteryTotal ?>
-          <?php if (!$isLastStep && isset($queue[$qpos+1])): ?> <span style="font-weight:400;color:var(--muted);">(다음: <?= htmlspecialchars($queue[$qpos+1]) ?>)</span><?php endif; ?>
-        </span>
+<div class="layout">
+  <!-- ===== 왼쪽 사이드바: 검사 이름 + 응답 기간 + 문항박스(안내) ===== -->
+  <aside class="sidebar">
+    <div class="sb-card">
+      <div class="sb-scale-name">🌙 PSQI-K</div>
+      <div class="sb-scale-full">한국판 피츠버그 수면의 질 지수</div>
+      <div class="sb-period-box">
+        <div class="sb-period-label">응답 기간</div>
+        <div class="sb-period-value">지난 한 달 동안</div>
+      </div>
+      <div class="sb-guide-title">📝 문항 안내</div>
+      <div class="sb-guide">지난 한 달간의 <strong>평소</strong> 수면 습관에 대한 질문입니다. 특정 하루가 아니라 <strong>대부분의 날</strong>에 해당하는 답을 골라 주세요.</div>
+      <div class="sb-progress">
+        <div class="sb-progress-label"><span id="ptxt">1 / <?= $totalItems ?></span><span id="ppct">0%</span></div>
+        <div class="sb-progress-bar"><div class="sb-progress-fill" id="pfill" style="width:0%"></div></div>
+      </div>
+    </div>
+    <div class="sb-card">
+      <?php if ($initPatient): ?>
+      <div class="sb-patient">
+        <b><?= htmlspecialchars($initPatient) ?></b>
+        <?php if ($gender): ?><span><?= htmlspecialchars($gender) ?></span><?php endif; ?>
+        <?php if ($battery && $batteryTotal > 1): ?><span>· 검사 <?= $batteryStep ?>/<?= $batteryTotal ?></span><?php endif; ?>
+        <span class="ok">✓ 동의</span>
+      </div>
       <?php endif; ?>
-      <span id="dt_bar"></span>
+      <button type="button" class="cancel-btn" id="cancelBtn" onclick="openCancel()">
+        <?= $battery ? ($isLastStep ? '이 검사 취소하고 결과 보기 →' : '이 검사 취소하고 다음으로 →') : '검사 취소' ?>
+      </button>
     </div>
-  </div>
-  <span class="info-badge">✅ 동의 완료</span>
-</div>
-<?php endif; ?>
+  </aside>
 
-<div class="card">
-  <div class="scale-head">
-    <div class="ico">🌙</div>
-    <div>
-      <strong>PSQI-K</strong>
-      <span>한국판 피츠버그 수면의 질 지수 · 지난 한 달 기준</span>
-    </div>
-  </div>
-
-  <div class="instruction">지난 한 달간의 <strong>평소</strong> 수면 습관에 대한 질문입니다. 특정 하루가 아니라 <strong>대부분의 날</strong>에 해당하는 답을 골라 주세요.</div>
-
-  <div class="progress-wrap">
-    <div class="progress-label">
-      <span id="ptxt">1 / <?= $meta['answer_count'] ?></span>
-      <span id="ppct">0%</span>
-    </div>
-    <div class="progress-bar"><div class="progress-fill" id="pfill" style="width:0%"></div></div>
-  </div>
+  <!-- ===== 오른쪽: 문항 ===== -->
+  <div class="content">
+  <div class="card">
 
   <?php foreach ($meta['items'] as $qi => $item): ?>
-  <div class="question-slide <?= $qi === 0 ? 'active' : '' ?>" id="slide-<?= $qi ?>">
+  <div class="question-slide <?= $qi === 0 ? 'active' : '' ?>" id="slide-<?= $qi ?>" data-optional="<?= !empty($item['optional']) ? '1' : '0' ?>">
     <div class="q-card">
-      <div class="q-number">문항 <?= $qi + 1 ?> / <?= $meta['answer_count'] ?></div>
+      <div class="q-number">문항 <?= $qi + 1 ?> / <?= $totalItems ?><?= !empty($item['optional']) ? ' · 선택' : '' ?></div>
       <div class="q-text"><?= htmlspecialchars($item['q']) ?></div>
 
-      <?php if ($item['type'] === 'time'): ?>
+      <?php if ($item['type'] === 'choice'): ?>
+        <?php $opts = $item['options'] ?? []; ?>
+        <div class="q-choice">
+          <?php foreach ($opts as $oi => $optLabel): ?>
+          <button type="button" class="choice-btn" data-qi="<?= $qi ?>" data-val="<?= $oi ?>"
+                  onclick="onLikert(<?= $qi ?>, <?= $oi ?>, this)"><?= htmlspecialchars($optLabel) ?></button>
+          <?php endforeach; ?>
+        </div>
+        <div class="optional-hint">해당 사항이 없으면 「다음」을 눌러 건너뛸 수 있습니다.</div>
+
+      <?php elseif ($item['type'] === 'text'): ?>
+        <textarea class="free-text" id="txt-<?= $qi ?>" placeholder="<?= htmlspecialchars($item['placeholder'] ?? '자유롭게 적어주세요 (선택)') ?>"
+                  oninput="onText(<?= $qi ?>, this.value)"></textarea>
+        <div class="optional-hint">선택 문항입니다. 없으면 비워두고 「다음」을 눌러주세요.</div>
+
+      <?php elseif ($item['type'] === 'time'): ?>
         <div class="time-picker-custom" id="tp-<?= $qi ?>">
           <div class="ampm-toggle">
             <div class="ampm-btn active" onclick="setAmpm(<?= $qi ?>,'AM')">오전</div>
@@ -278,14 +356,33 @@ body.font-lg .comp-name{font-size:.95rem !important;width:130px !important;}
           </div>
         <?php endif; ?>
 
-      <?php else: /* likert */ ?>
-        <?php $opts = $item['options'] ?? $freqOptions; ?>
+      <?php else: /* likert — 색상 세그먼트 바 */ ?>
+        <?php
+        $opts = $item['options'] ?? $freqOptions;
+        $oc = count($opts);
+        if ($oc >= 5) { $segColors=['#E0F2FE','#BAE6FD','#3B82F6','#1D4ED8','#0F172A']; $segTextDark=[true,true,true,false,false]; }
+        elseif ($oc === 4) { $segColors=['#DBEAFE','#93C5FD','#3B82F6','#1D4ED8']; $segTextDark=[true,true,false,false]; }
+        else { $segColors=['#DBEAFE','#60A5FA','#1D4ED8']; $segTextDark=[true,false,false]; }
+        ?>
         <div class="q-options">
-          <?php foreach ($opts as $oi => $optLabel): ?>
-          <button type="button" class="q-option-btn" data-qi="<?= $qi ?>" data-val="<?= $oi ?>"
-                  onclick="onLikert(<?= $qi ?>, <?= $oi ?>, this)"><?= htmlspecialchars($optLabel) ?></button>
+          <?php foreach ($opts as $oi => $optLabel):
+            $segBg = $segColors[$oi] ?? '#3B82F6';
+            $segText = ($segTextDark[$oi] ?? false) ? '#0f172a' : '#fff';
+          ?>
+          <button type="button" class="q-option-btn" style="--seg-bg:<?= $segBg ?>;--seg-text:<?= $segText ?>;"
+                  data-qi="<?= $qi ?>" data-val="<?= $oi ?>" onclick="onLikert(<?= $qi ?>, <?= $oi ?>, this)">
+            <span class="seg-block"><span class="seg-check">✓</span></span>
+            <span class="seg-label"><?= htmlspecialchars($optLabel) ?></span>
+          </button>
           <?php endforeach; ?>
         </div>
+        <?php if ($qi === 13): /* 5-j: 그 밖의 다른 이유 — 주관식 입력 */ ?>
+        <div class="inline-other">
+          <label>수면을 방해한 그 밖의 이유가 있다면 적어주세요 (선택)</label>
+          <textarea class="free-text" id="other-reason" placeholder="예: 이웃 소음, 아이 돌봄 등 (없으면 비워두세요)"
+                    oninput="OTHER_REASON=this.value"></textarea>
+        </div>
+        <?php endif; ?>
       <?php endif; ?>
     </div>
   </div>
@@ -330,17 +427,25 @@ body.font-lg .comp-name{font-size:.95rem !important;width:130px !important;}
 
   <input type="hidden" id="csrf_token" value="<?= htmlspecialchars($csrf) ?>">
   <input type="hidden" id="f_patient" value="<?= htmlspecialchars($initPatient) ?>">
-</div>
+  </div>
+  </div>
 </div>
 
 <script>
 const ITEM_TYPES = <?= json_encode(array_map(fn($it) => $it['type'], $meta['items'])) ?>;
-const TOTAL = <?= $meta['answer_count'] ?>;
+const ITEM_OPTIONAL = <?= json_encode(array_map(fn($it) => !empty($it['optional']), $meta['items'])) ?>;
+const TOTAL = <?= $totalItems ?>;                 // 전체 슬라이드 수(참고 문항 포함)
+const SCORED = <?= $scoredCount ?>;               // 채점 대상 문항 수(0~17)
 const CUTOFF = <?= $meta['cutoff'] ?>;
 const SCORING = <?= json_encode($meta['scoring']) ?>;
-const COLOR_HEX = {green:'#27ae60', yellow:'#e0a800', orange:'#e67e22', red:'#c0392b', darkred:'#922b21'};
+// 중한 결과는 붉은색 대신 검정 계열(--severe)로 표현
+const COLOR_HEX = {green:'#27ae60', yellow:'#e0a800', orange:'#e67e22', red:'#4b5563', darkred:'#4b5563', black:'#4b5563'};
+let OTHER_REASON = '';                             // 5-j 그 밖의 이유(주관식)
 
-const state = { current: 0, answers: {}, advancing: false, completed: false, savedId: null };  // answers[idx] = 값(시간문자열/숫자/리커트정수)
+const state = { current: 0, answers: {}, advancing: false, completed: false, savedId: null };  // answers[idx] = 값(시간문자열/숫자/리커트정수/선택문자열)
+
+// 주관식(참고) 입력
+function onText(i, val){ state.answers[i] = val; const nb=document.getElementById('btn-next'); if(nb) nb.disabled=false; }
 
 // 시계
 function tick(){
@@ -351,10 +456,29 @@ function tick(){
 tick(); setInterval(tick,1000);
 
 function isAnswered(i){
+  if (ITEM_OPTIONAL[i]) return true;   // 참고(선택) 문항은 응답 없이도 진행 가능
   const v = state.answers[i];
   if (v === undefined || v === null || v === '') return false;
   return true;
 }
+
+// ===== 문항 10(동거인/잠자리) 조건부 표시 =====
+// 'choice' 문항(동거인 유무)에서 "없다(인덱스 0)"를 고르거나 미응답이면
+// 그 뒤의 동거인 관찰 문항(선택 문항들)은 건너뜁니다.
+const LIV_IDX = ITEM_TYPES.indexOf('choice');
+const COHAB_ITEMS = [];
+if (LIV_IDX !== -1){ for (let i = LIV_IDX + 1; i < TOTAL; i++){ if (ITEM_OPTIONAL[i]) COHAB_ITEMS.push(i); } }
+function shouldSkip(idx){
+  if (COHAB_ITEMS.includes(idx)){
+    const liv = state.answers[LIV_IDX];
+    return (liv === undefined || parseInt(liv) === 0);   // 없음/미응답 → 건너뜀
+  }
+  return false;
+}
+function nextVisible(from){ let n = from + 1; while (n < TOTAL && shouldSkip(n)) n++; return n < TOTAL ? n : -1; }
+function prevVisible(from){ let p = from - 1; while (p >= 0 && shouldSkip(p)) p--; return p; }
+function visibleTotal(){ let t = 0; for (let i = 0; i < TOTAL; i++) if (!shouldSkip(i)) t++; return t; }
+function visiblePos(idx){ let p = 0; for (let i = 0; i <= idx; i++) if (!shouldSkip(i)) p++; return p; }
 
 function showSlide(idx){
   document.querySelectorAll('.question-slide').forEach(e=>e.classList.remove('active'));
@@ -367,7 +491,7 @@ function showSlide(idx){
   // 이전 응답이 있으면 선택 표시 복원
   const v = state.answers[idx];
   if (v !== undefined && v !== '') {
-    slide.querySelectorAll('.q-option-btn').forEach(b=>b.classList.toggle('selected', parseInt(b.dataset.val)===v));
+    slide.querySelectorAll('.q-option-btn, .choice-btn').forEach(b=>b.classList.toggle('selected', parseInt(b.dataset.val)===v));
     slide.querySelectorAll('.num-preset').forEach(b=>b.classList.toggle('selected', parseFloat(b.dataset.val)===v));
     const field = slide.querySelector('.num-field, .time-input');
     if (field && field.value === '') field.value = v;
@@ -387,18 +511,22 @@ function showSlide(idx){
 
   const prev = document.getElementById('btn-prev');
   const next = document.getElementById('btn-next');
-  prev.disabled = idx === 0;
+  prev.disabled = prevVisible(idx) < 0;
   next.disabled = !isAnswered(idx);
-  next.textContent = idx === TOTAL-1 ? '완료 →' : '다음 →';
+  next.textContent = nextVisible(idx) === -1 ? '완료 →' : '다음 →';
   updateProg();
 }
 
+function hasValue(i){
+  const v = state.answers[i];
+  return !(v === undefined || v === null || v === '');
+}
 function updateProg(){
-  let answered = 0;
-  for (let i=0;i<TOTAL;i++) if (isAnswered(i)) answered++;
-  const pct = Math.round(answered/TOTAL*100);
+  // 진행률은 "보이는 문항 기준"(건너뛴 동거인 문항은 제외)
+  const vt = visibleTotal(), vp = visiblePos(state.current);
+  const pct = Math.round(vp / vt * 100);
   document.getElementById('pfill').style.width = pct+'%';
-  document.getElementById('ptxt').textContent = `${state.current+1} / ${TOTAL}`;
+  document.getElementById('ptxt').textContent = `${vp} / ${vt}`;
   document.getElementById('ppct').textContent = pct+'%';
 }
 
@@ -529,12 +657,12 @@ function confirmTime(qi) {
 function onLikert(i, val, btn){
   if (state.advancing) return; // 연타/이중 클릭으로 인한 중복 진행·중복 저장 방지
   state.advancing = true;
-  document.querySelectorAll(`#slide-${i} .q-option-btn`).forEach(b=>b.classList.remove('selected'));
+  document.querySelectorAll(`#slide-${i} .q-option-btn, #slide-${i} .choice-btn`).forEach(b=>b.classList.remove('selected'));
   btn.classList.add('selected');
   state.answers[i] = val;
   document.getElementById('btn-next').disabled = false;
   updateProg();
-  setTimeout(()=>{ state.advancing = false; nextQ(); }, 260);   // 리커트는 자동 진행
+  setTimeout(()=>{ state.advancing = false; nextQ(); }, 260);   // 리커트/선택은 자동 진행
 }
 function onNum(i, raw, mx){
   let v = parseFloat(raw);
@@ -558,10 +686,11 @@ function padTwoDigits(i){
   if (!isNaN(v)) f.value = String(v).padStart(2, '0');
 }
 
-function prevQ(){ if (state.current>0) showSlide(state.current-1); }
+function prevQ(){ const p = prevVisible(state.current); if (p >= 0) showSlide(p); }
 function nextQ(){
   if (!isAnswered(state.current)) return;
-  if (state.current < TOTAL-1) showSlide(state.current+1);
+  const n = nextVisible(state.current);
+  if (n !== -1) showSlide(n);
   else showComplete();
 }
 
@@ -572,6 +701,16 @@ function parseTimeMin(s){
   const h=+m[1], mi=+m[2];
   if (h>23||mi>59) return null;
   return h*60+mi;
+}
+function buildPsqiAnswers(){
+  const a=[];
+  for(let i=0;i<TOTAL;i++){
+    if(ITEM_TYPES[i]==='time') a.push(state.answers[i]||'');
+    else if(ITEM_TYPES[i]==='text'||ITEM_TYPES[i]==='choice') a.push(state.answers[i]!==undefined?state.answers[i]:'');
+    else a.push(state.answers[i]!==undefined?state.answers[i]:0);
+  }
+  a.push(OTHER_REASON||'');   // 5-j 그 밖의 이유(주관식) → 배열 마지막 요소(채점 미포함)
+  return a;
 }
 function psqiScore(a){
   const lik = i => Math.max(0, Math.min(3, parseInt(a[i]||0)));
@@ -629,11 +768,7 @@ const PT = {
 function showComplete(){
   if (state.completed) return; // 중복 호출로 인한 중복 자동저장 방지
   state.completed = true;
-  const a = [];
-  for (let i=0;i<TOTAL;i++){
-    if (ITEM_TYPES[i]==='time') a.push(state.answers[i]||'');
-    else a.push(state.answers[i]!==undefined ? state.answers[i] : 0);
-  }
+  const a = buildPsqiAnswers();
   const r = psqiScore(a);
 
   let label='', color='green';
@@ -658,7 +793,7 @@ function showComplete(){
   const list = document.getElementById('compList');
   list.innerHTML = r.comps.map(c=>{
     const w = Math.round(c.v/3*100);
-    const barColor = c.v>=2 ? '#c0392b' : (c.v===1 ? '#e0a800' : '#27ae60');
+    const barColor = c.v>=2 ? '#4b5563' : (c.v===1 ? '#e0a800' : '#27ae60');
     return `<div class="comp-row">
       <div class="comp-name">${c.name}</div>
       <div class="comp-bar"><div class="comp-fill" style="width:${w}%;background:${barColor}"></div></div>
@@ -688,11 +823,7 @@ async function doSave(memo){
   const patient = document.getElementById('f_patient').value.trim();
   if (!patient){ window.location='consent.php?step=1'; return; }
 
-  const a = [];
-  for (let i=0;i<TOTAL;i++){
-    if (ITEM_TYPES[i]==='time') a.push(state.answers[i]||'');
-    else a.push(state.answers[i]!==undefined ? state.answers[i] : 0);
-  }
+  const a = buildPsqiAnswers();
 
   const statusEl = document.getElementById('save-status');
   statusEl.innerHTML = '<span style="color:var(--muted)">💾 저장 중...</span>';
@@ -736,8 +867,39 @@ async function doSave(memo){
 function autoSave(){ doSave(''); }
 function saveWithMemo(){ doSave(document.getElementById('memo').value); }
 
+// ===== 검사 취소/건너뛰기 =====
+function openCancel(){
+  const modal=document.getElementById('cancelModal');
+  const title=document.getElementById('cancelTitle'), msg=document.getElementById('cancelMsg'), btn=document.getElementById('cancelConfirm');
+  if(BATTERY){
+    title.textContent = BATTERY_LAST ? '이 검사를 취소할까요?' : '이 검사를 건너뛸까요?';
+    msg.textContent = BATTERY_LAST ? '현재 검사는 저장되지 않고 결과 화면으로 이동합니다.' : ('현재 검사는 저장되지 않고 다음 검사'+(NEXT_SCALE?(' ('+NEXT_SCALE+')'):'')+'로 넘어갑니다.');
+    btn.textContent = BATTERY_LAST ? '취소하고 결과 보기' : '건너뛰고 다음으로';
+    btn.onclick = ()=>{ window.location = NEXT_URL; };
+  } else {
+    title.textContent = '검사를 취소할까요?';
+    msg.textContent = '현재 검사의 응답은 저장되지 않습니다.';
+    btn.textContent = '취소하고 나가기';
+    btn.onclick = ()=>{ window.location = 'consent.php'; };
+  }
+  modal.classList.add('open');
+}
+function closeCancel(){ document.getElementById('cancelModal').classList.remove('open'); }
+
 ITEM_TYPES.forEach((t,qi)=>{ if (t==='time') setupClockFace(qi); });
 showSlide(0);
 </script>
+
+<!-- 취소 확인 모달 -->
+<div class="modal-overlay" id="cancelModal" onclick="if(event.target===this)closeCancel()">
+  <div class="modal-box">
+    <h3 id="cancelTitle">검사를 취소할까요?</h3>
+    <p id="cancelMsg">현재 검사의 응답은 저장되지 않습니다.</p>
+    <div class="modal-btns">
+      <button type="button" class="btn btn-secondary" onclick="closeCancel()">계속 검사</button>
+      <button type="button" class="btn btn-primary" id="cancelConfirm">취소하고 진행</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
