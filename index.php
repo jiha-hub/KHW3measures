@@ -380,6 +380,7 @@ body.font-lg .q-number{font-size:.9rem !important;}
     <div class="card">
     <?php foreach ($scale['questions'] as $qi => $question):
       $isFemaleOnly = in_array($qi, $scale['female_only_items'] ?? [], true);
+      $qOpts = $scale['question_options'][$qi] ?? $opts;
     ?>
     <div class="question-slide <?= $qi===0?'active':'' ?>" id="slide-<?= $key ?>-<?= $qi ?>"
          data-female="<?= $isFemaleOnly ? '1' : '0' ?>">
@@ -389,7 +390,7 @@ body.font-lg .q-number{font-size:.9rem !important;}
 
         <?php if ($layout === 'yesno'): ?>
           <div class="q-yesno">
-            <?php foreach ($opts as $oi => $optLabel): ?>
+            <?php foreach ($qOpts as $oi => $optLabel): ?>
             <button type="button" class="ynbtn" data-scale="<?= $key ?>" data-qi="<?= $qi ?>" data-idx="<?= $oi ?>"
                     onclick="selectAnswer(this)">
               <span class="yn-ico"><?= $oi === 0 ? '⭕' : '❌' ?></span><span><?= htmlspecialchars($optLabel) ?></span>
@@ -399,7 +400,7 @@ body.font-lg .q-number{font-size:.9rem !important;}
 
         <?php elseif ($layout === 'vertical'): ?>
           <div class="q-vert">
-            <?php foreach ($opts as $oi => $optLabel): ?>
+            <?php foreach ($qOpts as $oi => $optLabel): ?>
             <button type="button" class="vbtn" data-scale="<?= $key ?>" data-qi="<?= $qi ?>" data-idx="<?= $oi ?>"
                     onclick="selectAnswer(this)"><?= htmlspecialchars($optLabel) ?></button>
             <?php endforeach; ?>
@@ -407,7 +408,7 @@ body.font-lg .q-number{font-size:.9rem !important;}
 
         <?php else: /* segment */ ?>
           <div class="q-options">
-            <?php foreach ($opts as $oi => $optLabel):
+            <?php foreach ($qOpts as $oi => $optLabel):
               $segBg   = $segColors[$oi] ?? '#3B82F6';
               $segText = ($segTextDark[$oi] ?? false) ? '#0f172a' : '#fff';
             ?>

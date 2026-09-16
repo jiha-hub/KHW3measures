@@ -62,7 +62,7 @@ if (!function_exists('scaleOrder')) {
     /** 검사 진행 및 표시의 정규 순서 */
     function scaleOrder(): array
     {
-        return ['CSEI-s', 'PHQ-9', 'GAD-7', 'PSS-10', 'PHQ-15', 'BDI-9', 'S-GDpS', 'K-MDQ', 'SSD-12', 'PSQI-K'];
+        return ['CSEI-s', 'PHQ-9', 'GAD-7', 'PSS-10', 'PHQ-15', 'BDI-9', 'S-GDpS', 'K-MDQ', 'SSD-12', 'PSQI-K', 'ISI'];
     }
 }
 

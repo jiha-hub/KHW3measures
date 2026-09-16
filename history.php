@@ -50,11 +50,11 @@ $totalPage   = max(1, (int)ceil($totalVisits / $perPage));
 
 // 이 페이지의 방문 목록 (검사일시 최신순)
 $visitStmt = $db->prepare("
-    SELECT $vkeyExpr AS vkey, MAX(a.created_at) AS vtime, p.name AS patient_name,
-           p.birth_date, p.phone, a.battery_id
+    SELECT $vkeyExpr AS vkey, MAX(a.created_at) AS vtime, p.id AS patient_id, p.name AS patient_name,
+           p.birth_date, p.gender, p.phone, a.battery_id
     FROM assessments a JOIN patients p ON a.patient_id=p.id
     WHERE $whereStr
-    GROUP BY vkey, p.name, p.birth_date, p.phone, a.battery_id
+    GROUP BY vkey, p.id, p.name, p.birth_date, p.gender, p.phone, a.battery_id
     ORDER BY vtime DESC
     LIMIT $perPage OFFSET $offset");
 $visitStmt->execute($params);
@@ -339,7 +339,7 @@ tr:hover td { background: #f8fafd; }
           <label>척도</label>
           <select name="scale">
             <option value="">전체</option>
-            <?php foreach (['CSEI-s','PHQ-9','GAD-7','PSS-10','PHQ-15','BDI-9','S-GDpS','K-MDQ','SSD-12','PSQI-K'] as $sc): ?>
+            <?php foreach (scaleOrder() as $sc): ?>
             <option value="<?= $sc ?>" <?= $filterScale === $sc ? 'selected' : '' ?>><?= $sc ?></option>
             <?php endforeach; ?>
           </select>
@@ -404,6 +404,15 @@ tr:hover td { background: #f8fafd; }
         <span class="v-date"><?= date('Y.m.d (D) H:i', strtotime($v['vtime'])) ?></span>
         <span class="v-name"<?= $v['phone'] ? ' title="연락처: '.htmlspecialchars($v['phone']).'"' : '' ?>>👤 <?= htmlspecialchars($v['patient_name']) ?></span>
         <span class="v-birth"><?= htmlspecialchars($v['birth_date'] ?: '생년월일 미상') ?><?= $age!==null ? " (만 {$age}세)" : '' ?></span>
+        <?php if (!$showDeleted): ?>
+        <button type="button" class="btn btn-secondary btn-sm" title="환자 기본정보 수정"
+                onclick="openPatientEdit(this)"
+                data-pid="<?= (int)$v['patient_id'] ?>"
+                data-name="<?= htmlspecialchars($v['patient_name'], ENT_QUOTES) ?>"
+                data-birth="<?= htmlspecialchars($v['birth_date'] ?? '', ENT_QUOTES) ?>"
+                data-gender="<?= htmlspecialchars($v['gender'] ?? '', ENT_QUOTES) ?>"
+                data-phone="<?= htmlspecialchars($v['phone'] ?? '', ENT_QUOTES) ?>">✏️ 정보수정</button>
+        <?php endif; ?>
         <?php if (!empty($v['battery_id']) && !$showDeleted): ?>
         <a class="btn btn-secondary btn-sm" href="summary.php?battery=<?= urlencode($v['battery_id']) ?>" title="이 방문 전체 요약 / PDF">🖨️ 방문요약</a>
         <?php endif; ?>
@@ -695,6 +704,84 @@ function toggleAll(box){ rowChecks().forEach(c=>c.checked = box.checked); update
   inp.addEventListener('input', fmt); fmt();
 })();
 updateSel();
+</script>
+<!-- ===== 환자 정보 수정 모달 ===== -->
+<div class="modal-overlay" id="patientEditModal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <h2>👤 환자 정보 수정</h2>
+      <button type="button" class="modal-close" onclick="closePatientEdit()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form method="post" action="patient_edit.php">
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf) ?>">
+        <input type="hidden" name="patient_id" id="pe_pid">
+        <div class="filter-group">
+          <label>이름</label>
+          <input type="text" name="name" id="pe_name" required style="width:100%;">
+        </div>
+        <div class="filter-group">
+          <label>생년월일 <span style="font-weight:400;">(8자리 숫자, 없으면 비움)</span></label>
+          <input type="text" name="birth_date" id="pe_birth" inputmode="numeric" maxlength="10"
+                 autocomplete="off" placeholder="예: 19800315" style="width:100%;">
+          <div class="birth-hint" id="pe_birth_hint">8자리 숫자 입력</div>
+        </div>
+        <div class="filter-group">
+          <label>성별</label>
+          <select name="gender" id="pe_gender" style="width:100%;">
+            <option value="">선택 안 함</option>
+            <option value="남">남</option>
+            <option value="여">여</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>연락처</label>
+          <input type="text" name="phone" id="pe_phone" autocomplete="off"
+                 placeholder="예: 010-1234-5678" style="width:100%;">
+        </div>
+        <p style="font-size:.78rem;color:var(--muted);margin:6px 0 14px;line-height:1.5;">
+          이 환자의 모든 검사 기록에 반영됩니다. 이름·생년월일을 바꾸면 동명이인 구분에 영향을 줄 수 있어요.
+        </p>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="btn btn-secondary" style="flex:1;" onclick="closePatientEdit()">취소</button>
+          <button type="submit" class="btn btn-primary" style="flex:1;">저장</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+function openPatientEdit(btn){
+  document.getElementById('pe_pid').value    = btn.getAttribute('data-pid') || '';
+  document.getElementById('pe_name').value   = btn.getAttribute('data-name') || '';
+  var b = (btn.getAttribute('data-birth') || '').replace(/[^0-9]/g,'');
+  var bf = b;
+  if(b.length>=5) bf = b.slice(0,4)+'-'+b.slice(4);
+  if(b.length>=7) bf = b.slice(0,4)+'-'+b.slice(4,6)+'-'+b.slice(6);
+  document.getElementById('pe_birth').value  = bf;
+  document.getElementById('pe_gender').value = btn.getAttribute('data-gender') || '';
+  document.getElementById('pe_phone').value  = btn.getAttribute('data-phone') || '';
+  document.getElementById('patientEditModal').classList.add('open');
+}
+function closePatientEdit(){ document.getElementById('patientEditModal').classList.remove('open'); }
+document.getElementById('patientEditModal').addEventListener('click', function(e){ if(e.target===this) closePatientEdit(); });
+(function(){
+  var inp=document.getElementById('pe_birth'), hint=document.getElementById('pe_birth_hint');
+  if(!inp) return;
+  inp.addEventListener('input', function(){
+    var d=inp.value.replace(/[^0-9]/g,'').slice(0,8), f=d;
+    if(d.length>=5) f=d.slice(0,4)+'-'+d.slice(4);
+    if(d.length>=7) f=d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6);
+    inp.value=f;
+    if(!hint) return;
+    if(d.length===8){
+      var y=+d.slice(0,4),m=+d.slice(4,6),dd=+d.slice(6,8),dt=new Date(y,m-1,dd);
+      if(dt.getFullYear()===y&&dt.getMonth()===m-1&&dt.getDate()===dd){hint.textContent='✅ '+y+'년 '+m+'월 '+dd+'일';hint.style.color='#1e8449';}
+      else{hint.textContent='❌ 유효하지 않은 날짜';hint.style.color='#c0392b';}
+    } else if(d.length>0){hint.textContent=d.length+'/8자리';hint.style.color='var(--muted)';}
+    else{hint.textContent='8자리 숫자 입력';hint.style.color='var(--muted)';}
+  });
+})();
 </script>
 <?php include __DIR__ . '/ui_settings.php'; ?>
 </body>

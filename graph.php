@@ -54,6 +54,7 @@ $cutoffMap       = [
     'K-MDQ'  => ['value' => 7,  'label' => '절단점 7점 (양극성 선별 양성)'],
     'SSD-12' => ['value' => 23, 'label' => '절단점 23점 (국제 표준)'],
     'PSQI-K' => ['value' => 5,  'label' => '절단점 5점 초과 시 수면의 질 저하'],
+    'ISI'    => ['value' => 15, 'label' => '절단점 15점 이상 시 임상적 불면 시사'],
     'CSEI-s' => null,
 ];
 $selectedPatientName  = '';

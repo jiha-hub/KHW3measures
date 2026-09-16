@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS assessments (
     id INT AUTO_INCREMENT PRIMARY KEY,
     patient_id INT NOT NULL,
     scale_type ENUM('PHQ-9', 'GAD-7', 'PSS-10', 'PSQI-K', 'CSEI-s',
-                    'PHQ-15', 'BDI-9', 'S-GDpS', 'K-MDQ', 'SSD-12') NOT NULL,
+                    'PHQ-15', 'BDI-9', 'S-GDpS', 'K-MDQ', 'SSD-12', 'ISI') NOT NULL,
     answers JSON NOT NULL,
     total_score INT NOT NULL,          -- CSEI-s는 종합 T점수
     result_label VARCHAR(50) NOT NULL, -- CSEI-s는 종합 분류(정상군/주의군/위험군)
